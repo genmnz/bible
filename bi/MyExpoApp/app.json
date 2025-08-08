@@ -1,0 +1,55 @@
+{
+  "expo": {
+    "name": "MyExpoApp",
+    "slug": "MyExpoApp",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "This app needs access to camera to take photos.",
+        "NSPhotoLibraryUsageDescription": "This app needs access to photo library to view and organize your photos."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "edgeToEdgeEnabled": true,
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "READ_MEDIA_IMAGES"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "This app needs access to photo library to select and save photos.",
+          "cameraPermission": "This app needs access to camera to take photos."
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "This app needs access to photo library to view and organize your photos.",
+          "savePhotosPermission": "This app needs permission to save photos to your device."
+        }
+      ]
+    ]
+  }
+}
