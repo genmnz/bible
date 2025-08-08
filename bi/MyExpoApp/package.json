@@ -23,14 +23,15 @@
     "expo-media-library": "~17.1.7",
     "expo-sharing": "~13.1.5",
     "expo-status-bar": "~2.2.3",
+    "fast-xml-parser": "^5.2.5",
     "react": "19.0.0",
     "react-dom": "19.0.0",
     "react-native": "0.79.5",
     "react-native-safe-area-context": "5.4.0",
     "react-native-screens": "~4.11.1",
     "react-native-web": "^0.20.0",
-    "react-native-xml2js": "^1.0.3",
-    "react-xml-parser": "^1.1.8"
+    "react-xml-parser": "^1.1.8",
+    "xmldom-qsa": "^1.1.3"
   },
   "devDependencies": {
     "@babel/core": "^7.20.0"

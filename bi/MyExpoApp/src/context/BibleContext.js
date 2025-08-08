@@ -1,8 +1,9 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
 import { Asset } from 'expo-asset';
 import * as FileSystem from 'expo-file-system';
-import { parseString } from 'react-native-xml2js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { parseOsisXmlString, parseOsisBookXmlString, OSIS_BOOK_NAMES } from '../utils/osisParser';
+import { ARASVD_BOOK_ASSETS, ARASVD_ORDER } from '../bibles/arasvd';
 
 const BibleContext = createContext();
 
@@ -14,56 +15,69 @@ export const BibleProvider = ({ children }) => {
   const [bookmarks, setBookmarks] = useState([]);
   const [BOOK_NAMES, setBOOK_NAMES] = useState({});
 
+  const readAssetAsString = async (asset) => {
+    try {
+      if (!asset.localUri) await asset.downloadAsync();
+      if (asset.localUri) {
+        return await FileSystem.readAsStringAsync(asset.localUri);
+      }
+    } catch (e) {
+      // fall through to fetch
+    }
+    // Fallback: fetch via network/url (web/dev)
+    const url = asset.uri || asset.localUri;
+    if (!url) throw new Error('Asset has no uri');
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`Failed to fetch asset: ${res.status}`);
+    return await res.text();
+  };
+
   useEffect(() => {
     const loadBibleData = async () => {
       try {
-        const asset = Asset.fromModule(require('../../assets/bible/arasvd.xml'));
-        await asset.downloadAsync();
-        const xmlString = await FileSystem.readAsStringAsync(asset.localUri);
-
-        parseString(xmlString, { explicitArray: false }, (err, result) => {
-          if (err) {
-            console.error('Error parsing XML:', err);
-            setLoading(false);
-            return;
+        const loadedBooks = [];
+        // Primary source: split per-book XMLs bundled in src/bibles/arasvd/
+        for (const bookId of ARASVD_ORDER) {
+          const mod = ARASVD_BOOK_ASSETS[bookId];
+          if (!mod) continue; // Skip missing files
+          try {
+            const asset = Asset.fromModule(mod);
+            const xmlString = await readAssetAsString(asset);
+            const book = parseOsisBookXmlString(xmlString);
+            loadedBooks.push(book);
+          } catch (e) {
+            console.warn(`Failed to load ${bookId}:`, e?.message || e);
           }
+        }
 
-          const osisText = result.osis.osisText;
-          const work = osisText.header.work;
-          const bookDivs = osisText.div;
+        // Fallback: parse the single monolithic OSIS file if nothing loaded
+        // or use it to fill any missing books from split assets
+        try {
+          const needed = ARASVD_ORDER.filter(id => !loadedBooks.some(b => b.id === id));
+          if (loadedBooks.length === 0 || needed.length > 0) {
+            const asset = Asset.fromModule(require('../../assets/bible/arasvd.xml'));
+            const xmlString = await readAssetAsString(asset);
+            const parsed = parseOsisXmlString(xmlString);
+            if (loadedBooks.length === 0) {
+              loadedBooks.push(...parsed);
+            } else if (needed.length > 0) {
+              for (const id of needed) {
+                const found = parsed.find(b => b.id === id);
+                if (found) loadedBooks.push(found);
+              }
+              // keep canonical order
+              loadedBooks.sort((a, b) => ARASVD_ORDER.indexOf(a.id) - ARASVD_ORDER.indexOf(b.id));
+            }
+          }
+        } catch (fallbackErr) {
+          console.error('OSIS parse (fallback/fill) failed:', fallbackErr);
+        }
 
-          const parsedBooks = bookDivs.map((bookDiv) => {
-            const bookId = bookDiv.$.osisID;
-            const chapters = Array.isArray(bookDiv.chapter) ? bookDiv.chapter : [bookDiv.chapter];
-            return {
-              id: bookId,
-              name: work.title, // This is a placeholder, will be replaced by a proper name mapping
-              chapters: chapters.map((chapter) => {
-                const verses = Array.isArray(chapter.verse) ? chapter.verse : [chapter.verse];
-                return {
-                  number: parseInt(chapter.$.osisID.split('.')[1], 10),
-                  verses: verses.map((verse) => ({
-                    id: verse.$.osisID,
-                    number: parseInt(verse.$.osisID.split('.')[2], 10),
-                    text: verse._,
-                  })),
-                };
-              }),
-              totalChapters: chapters.length,
-            };
-          });
-
-          const bookNames = parsedBooks.reduce((acc, book) => {
-            acc[book.id] = book.name;
-            return acc;
-          }, {});
-
-          setBooks(parsedBooks);
-          setBOOK_NAMES(bookNames);
-          setLoading(false);
-        });
+        setBooks(loadedBooks);
+        setBOOK_NAMES(OSIS_BOOK_NAMES);
       } catch (error) {
         console.error('Error loading Bible:', error);
+      } finally {
         setLoading(false);
       }
     };
