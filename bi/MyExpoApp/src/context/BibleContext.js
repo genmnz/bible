@@ -4,6 +4,7 @@ import * as FileSystem from 'expo-file-system';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { parseOsisBookXmlString, OSIS_BOOK_NAMES, OSIS_BOOK_NAMES_ARABIC } from '../utils/osisParser';
 import { ARASVD_BOOK_ASSETS, ARASVD_ORDER } from '../bibles/arasvd';
+import { ARAVD_BOOK_ASSETS, ARAVD_ORDER } from '../bibles/aravd';
 import { KJV_BOOK_ASSETS, KJV_ORDER } from '../bibles/en.kjv';
 import { useLocale } from './LocaleContext';
 import { InteractionManager } from 'react-native';
@@ -17,7 +18,7 @@ export const BibleProvider = ({ children }) => {
   const [favorites, setFavorites] = useState([]);
   const [BOOK_NAMES, setBOOK_NAMES] = useState({});
   const { language } = useLocale();
-  const [version, setVersionState] = useState('arasvd'); // 'arasvd' | 'kjv'
+  const [version, setVersionState] = useState('aravd'); // 'aravd' | 'arasvd' | 'kjv'
 
   const readAssetAsString = async (asset) => {
     try {
@@ -41,9 +42,17 @@ export const BibleProvider = ({ children }) => {
       try {
         const loadedBooks = [];
         // Load split per-book XMLs for selected version (independent of UI language)
-        const usingArabic = version === 'arasvd';
-        const ORDER = usingArabic ? ARASVD_ORDER : KJV_ORDER;
-        const ASSETS = usingArabic ? ARASVD_BOOK_ASSETS : KJV_BOOK_ASSETS;
+        let ORDER, ASSETS;
+        if (version === 'aravd') {
+          ORDER = ARAVD_ORDER;
+          ASSETS = ARAVD_BOOK_ASSETS;
+        } else if (version === 'arasvd') {
+          ORDER = ARASVD_ORDER;
+          ASSETS = ARASVD_BOOK_ASSETS;
+        } else {
+          ORDER = KJV_ORDER;
+          ASSETS = KJV_BOOK_ASSETS;
+        }
         for (const bookId of ORDER) {
           const mod = ASSETS[bookId];
           if (!mod) continue; // Skip missing files
@@ -100,11 +109,23 @@ export const BibleProvider = ({ children }) => {
         }
       }
 
-      // Determine Bible version from UI language and persist it
-      // We intentionally override any mismatched stored value to ensure content matches UI language
-      const desiredVersion = language === 'ar' ? 'arasvd' : 'kjv';
-      setVersionState(desiredVersion);
-      try { await AsyncStorage.setItem('bibleVersion', desiredVersion); } catch {}
+      // Determine Bible version from storage & UI language and persist it
+      // Arabic supports two versions: 'aravd' (default, with tashkeel) and 'arasvd' (alternative)
+      // English uses 'kjv'. If stored version is incompatible with language, switch to default for that language.
+      let storedVersion = null;
+      try { storedVersion = await AsyncStorage.getItem('bibleVersion'); } catch {}
+      let resolved = 'kjv';
+      if (language === 'ar') {
+        if (storedVersion === 'aravd' || storedVersion === 'arasvd') {
+          resolved = storedVersion;
+        } else {
+          resolved = 'aravd';
+        }
+      } else {
+        resolved = 'kjv';
+      }
+      setVersionState(resolved);
+      try { await AsyncStorage.setItem('bibleVersion', resolved); } catch {}
     };
 
     setLoading(true);
@@ -128,12 +149,17 @@ export const BibleProvider = ({ children }) => {
     setBOOK_NAMES(namesMap);
   }, [language, books]);
 
-  // Ensure the Bible version follows the selected UI language (ARASVD for Arabic, KJV for English)
+  // Ensure the Bible version follows the selected UI language category
+  // Arabic: keep either 'aravd' (default) or 'arasvd' if already chosen; English: force 'kjv'
   useEffect(() => {
-    const desired = language === 'ar' ? 'arasvd' : 'kjv';
-    if (version !== desired) {
-      // Use the provided setter to keep AsyncStorage in sync and trigger reload
-      setVersion(desired);
+    if (language === 'ar') {
+      if (version === 'kjv') {
+        setVersion('aravd'); // move to Arabic default if coming from English
+      }
+    } else {
+      if (version !== 'kjv') {
+        setVersion('kjv');
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [language]);
