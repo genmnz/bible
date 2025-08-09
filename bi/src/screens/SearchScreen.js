@@ -28,6 +28,7 @@ const SearchScreen = ({ navigation }) => {
   const [searchResults, setSearchResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const [selectedBook, setSelectedBook] = useState(null);
+  const [testament, setTestament] = useState('all'); // 'all' | 'ot' | 'nt'
   const [recentSearches, setRecentSearches] = useState([]);
 
   useEffect(() => {
@@ -36,12 +37,18 @@ const SearchScreen = ({ navigation }) => {
     } else {
       setSearchResults([]);
     }
-  }, [searchQuery, selectedBook]);
+  }, [searchQuery, selectedBook, testament]);
 
   const performSearch = async () => {
     setLoading(true);
     try {
-      const results = searchVerses(searchQuery, selectedBook);
+      // If a specific book is selected, ignore testament filter
+      const options = selectedBook
+        ? { bookId: selectedBook }
+        : (testament !== 'all' ? { testament } : undefined);
+      const results = options
+        ? searchVerses(searchQuery, options)
+        : searchVerses(searchQuery);
       setSearchResults(results);
 
       // Add to recent searches
@@ -127,17 +134,52 @@ const SearchScreen = ({ navigation }) => {
       <TouchableOpacity
         style={[
           styles.bookFilterButton,
-          !selectedBook && styles.activeBookFilter,
+          !selectedBook && testament === 'all' && styles.activeBookFilter,
         ]}
-        onPress={() => setSelectedBook(null)}
+        onPress={() => { setSelectedBook(null); setTestament('all'); }}
       >
         <Text
           style={[
             styles.bookFilterText,
-            !selectedBook && styles.activeBookFilterText,
+            !selectedBook && testament === 'all' && styles.activeBookFilterText,
           ]}
         >
           All Books
+        </Text>
+      </TouchableOpacity>
+
+      {/* Testament filters */}
+      <TouchableOpacity
+        style={[
+          styles.bookFilterButton,
+          !selectedBook && testament === 'ot' && styles.activeBookFilter,
+        ]}
+        onPress={() => { setSelectedBook(null); setTestament(testament === 'ot' ? 'all' : 'ot'); }}
+      >
+        <Text
+          style={[
+            styles.bookFilterText,
+            !selectedBook && testament === 'ot' && styles.activeBookFilterText,
+          ]}
+        >
+          Old Testament
+        </Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={[
+          styles.bookFilterButton,
+          !selectedBook && testament === 'nt' && styles.activeBookFilter,
+        ]}
+        onPress={() => { setSelectedBook(null); setTestament(testament === 'nt' ? 'all' : 'nt'); }}
+      >
+        <Text
+          style={[
+            styles.bookFilterText,
+            !selectedBook && testament === 'nt' && styles.activeBookFilterText,
+          ]}
+        >
+          New Testament
         </Text>
       </TouchableOpacity>
 
@@ -149,7 +191,15 @@ const SearchScreen = ({ navigation }) => {
             styles.bookFilterButton,
             selectedBook === bookId && styles.activeBookFilter,
           ]}
-          onPress={() => setSelectedBook(selectedBook === bookId ? null : bookId)}
+          onPress={() => {
+            if (selectedBook === bookId) {
+              setSelectedBook(null);
+            } else {
+              setSelectedBook(bookId);
+              // When selecting a book, reset testament
+              setTestament('all');
+            }
+          }}
         >
           <Text
             style={[
@@ -299,7 +349,7 @@ const makeStyles = (colors) => {
     separator: shared.separator,
     recentSearchesContainer: { padding: 16 },
     sectionTitle: { fontSize: 18, fontWeight: 'bold', color: colors.text, marginBottom: 16 },
-    recentSearchItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.card, borderRadius: 8, padding: 12, marginBottom: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2, elevation: 1 },
+    recentSearchItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.card, borderRadius: 8, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: colors.border },
     recentSearchText: { flex: 1, fontSize: 16, color: colors.text, marginLeft: 12 },
     recentSearchCount: { fontSize: 12, color: colors.subtext },
     emptyState: shared.emptyState,

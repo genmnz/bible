@@ -20,6 +20,35 @@ export const BibleProvider = ({ children }) => {
   const { language } = useLocale();
   const [version, setVersionState] = useState('aravd'); // 'aravd' | 'arasvd' | 'kjv'
 
+  // Old/New Testament book IDs (OSIS)
+  const OT_BOOKS = new Set([
+    'Gen','Exod','Lev','Num','Deut','Josh','Judg','Ruth','1Sam','2Sam','1Kgs','2Kgs','1Chr','2Chr','Ezra','Neh','Esth','Job','Ps','Prov','Eccl','Song','Isa','Jer','Lam','Ezek','Dan','Hos','Joel','Amos','Obad','Jonah','Mic','Nah','Hab','Zeph','Hag','Zech','Mal'
+  ]);
+  const NT_BOOKS = new Set([
+    'Matt','Mark','Luke','John','Acts','Rom','1Cor','2Cor','Gal','Eph','Phil','Col','1Thess','2Thess','1Tim','2Tim','Titus','Phlm','Heb','Jas','1Pet','2Pet','1John','2John','3John','Jude','Rev'
+  ]);
+
+  // Normalize text for search: remove Arabic diacritics (tashkeel), tatweel, unify alef forms, normalize ya/alif maqsura,
+  // optionally strip spaces and lowercase for case-insensitive matching.
+  const normalizeForSearch = (str, { ignoreSpaces = true } = {}) => {
+    if (!str) return '';
+    let s = String(str).toLowerCase();
+    // Remove Arabic diacritics and tatweel
+    s = s
+      .replace(/[\u0610-\u061A]/g, '')
+      .replace(/[\u064B-\u065F]/g, '')
+      .replace(/[\u0670]/g, '')
+      .replace(/[\u06D6-\u06ED]/g, '')
+      .replace(/[\u0640]/g, ''); // tatweel
+    // Unify common letter variants (Arabic)
+    s = s
+      .replace(/[\u0622\u0623\u0625]/g, '\u0627') // آ/أ/إ -> ا
+      .replace(/[\u0649]/g, '\u064A'); // ى -> ي
+    // Strip all whitespace if requested
+    if (ignoreSpaces) s = s.replace(/\s+/g, '');
+    return s;
+  };
+
   const readAssetAsString = async (asset) => {
     try {
       if (!asset.localUri) await asset.downloadAsync();
@@ -129,15 +158,14 @@ export const BibleProvider = ({ children }) => {
     };
 
     setLoading(true);
-    const interactionTask = InteractionManager.runAfterInteractions(() => {
-      // Kick off heavy parsing work after initial interactions for faster perceived load
-      return loadBibleData();
-    });
+    // Start loading immediately; on some platforms runAfterInteractions may not fire promptly (or at all)
+    loadBibleData();
+    // Optionally yield to UI thread if available, but don't rely on it
+    try {
+      InteractionManager.runAfterInteractions(() => {});
+    } catch {}
     loadUserData();
-    return () => {
-      // Cancel if possible
-      interactionTask && interactionTask.cancel && interactionTask.cancel();
-    };
+    return () => {};
   }, [version]);
 
   // Rebuild localized book names when UI language changes without re-parsing XML
@@ -180,16 +208,37 @@ export const BibleProvider = ({ children }) => {
     return books.find((b) => b.id === bookId);
   };
 
-  const searchVerses = (query, bookId) => {
+  // Search verses with normalization and optional filtering by bookId and testament ('ot' | 'nt')
+  const searchVerses = (query, bookIdOrOptions, testamentMaybe) => {
     if (!query) return [];
-    const lowerCaseQuery = query.toLowerCase();
+    let bookId = undefined;
+    let testament = undefined; // 'ot' | 'nt'
+    if (bookIdOrOptions && typeof bookIdOrOptions === 'object') {
+      bookId = bookIdOrOptions.bookId;
+      testament = bookIdOrOptions.testament;
+    } else {
+      bookId = bookIdOrOptions;
+      testament = testamentMaybe;
+    }
+
+    const q = normalizeForSearch(query);
     let results = [];
-    const searchBooks = bookId ? books.filter((b) => b.id === bookId) : books;
+
+    // Determine books to search
+    let searchBooks = books;
+    if (bookId) {
+      searchBooks = books.filter((b) => b.id === bookId);
+    } else if (testament === 'ot') {
+      searchBooks = books.filter((b) => OT_BOOKS.has(b.id));
+    } else if (testament === 'nt') {
+      searchBooks = books.filter((b) => NT_BOOKS.has(b.id));
+    }
 
     searchBooks.forEach((book) => {
       book.chapters.forEach((chapter) => {
         chapter.verses.forEach((verse) => {
-          if (verse.text.toLowerCase().includes(lowerCaseQuery)) {
+          const normalizedVerse = normalizeForSearch(verse.text);
+          if (normalizedVerse.includes(q)) {
             results.push({
               ...verse,
               bookId: book.id,

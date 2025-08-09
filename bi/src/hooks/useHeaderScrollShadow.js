@@ -3,8 +3,8 @@ import { useCallback, useRef } from 'react';
 /**
  * useHeaderScrollShadow
  *
- * Provides an efficient onScroll handler that toggles the React Navigation
- * header shadow/border when the scroll offset passes a threshold.
+ * Provides an efficient onScroll handler that toggles a subtle React Navigation
+ * header bottom border (no native shadows) when the scroll offset passes a threshold.
  *
  * - Minimizes navigation.setOptions calls (stateful guard)
  * - Uses requestAnimationFrame to coalesce rapid scroll events
@@ -22,9 +22,9 @@ export default function useHeaderScrollShadow(navigation, { colors, threshold = 
     if (hasShadowRef.current === show) return;
     hasShadowRef.current = show;
 
-    // Apply subtle border for both platforms; rely on headerShadowVisible primarily
+    // Apply only a subtle bottom border for both platforms; never enable native shadows
     navigation.setOptions({
-      headerShadowVisible: show,
+      headerShadowVisible: false,
       headerStyle: show
         ? {
             backgroundColor: 'transparent',

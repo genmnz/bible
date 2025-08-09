@@ -96,6 +96,26 @@ const FavoritesScreen = ({ navigation }) => {
   const styles = useThemedStyles(makeStyles);
   const onScroll = useHeaderScrollShadow(navigation, { colors, threshold: 6 });
 
+  React.useLayoutEffect(() => {
+    navigation.setOptions({
+      headerTitle: () => (
+        <View style={styles.titleContainer}>
+          <Ionicons name="heart" size={22} color={colors.danger} />
+          <Text style={[styles.title, { fontSize: 20, marginLeft: 8 }]}>{t('tab.favorites')}</Text>
+        </View>
+      ),
+      headerRight: () =>
+        favorites.length > 0 ? (
+          <TouchableOpacity
+            style={{ paddingHorizontal: 12 }}
+            onPress={handleClearAllFavorites}
+          >
+            <Ionicons name="trash-outline" size={22} color={colors.danger} />
+          </TouchableOpacity>
+        ) : null,
+    });
+  }, [navigation, favorites.length, colors.danger, t]);
+
   const renderFavoriteItem = ({ item }) => {
     const refText = `${BOOK_NAMES[item.bookId] || item.bookId} ${item.chapterNumber}:${item.verseNumber}`;
     const currentText = (() => {
@@ -137,22 +157,7 @@ const FavoritesScreen = ({ navigation }) => {
 
   const renderHeader = () => (
     <View style={styles.header}>
-      <View style={styles.headerTop}>
-        <View style={styles.titleContainer}>
-          <Ionicons name="heart" size={32} color={colors.danger} />
-          <Text style={styles.title}>{t('tab.favorites')}</Text>
-        </View>
-        <View style={styles.headerButtons}>
-          {favorites.length > 0 && (
-            <TouchableOpacity
-              style={styles.headerButton}
-              onPress={handleClearAllFavorites}
-            >
-              <Ionicons name="trash-outline" size={24} color={colors.danger} />
-            </TouchableOpacity>
-          )}
-        </View>
-      </View>
+      {/* Header merged into navigation header */}
 
       {/* Sort Controls */}
       {favorites.length > 0 && (

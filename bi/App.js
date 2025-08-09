@@ -9,7 +9,7 @@ import { BlurView } from "expo-blur";
 
 // Context Providers
 import { LocaleProvider, useLocale } from "./src/context/LocaleContext";
-import { BibleProvider } from "./src/context/BibleContext";
+import { BibleProvider, useBible } from "./src/context/BibleContext";
 import { FavoritesProvider } from "./src/context/FavoritesContext";
 import { ThemeProvider, useThemeMode } from "./src/context/ThemeContext";
 
@@ -20,6 +20,7 @@ import ChapterScreen from "./src/screens/ChapterScreen";
 import SearchScreen from "./src/screens/SearchScreen";
 import FavoritesScreen from "./src/screens/FavoritesScreen";
 import SettingsScreen from "./src/screens/SettingsScreen";
+import BookLoader from "./src/components/BookLoader";
 
 // Navigation
 const Tab = createBottomTabNavigator();
@@ -235,6 +236,7 @@ function TabNavigator() {
 // Main App Component
 function AppContainer() {
   const { isDark, colors } = useThemeMode();
+  const { loading } = useBible();
 
   const navTheme = {
     dark: isDark,
@@ -252,6 +254,7 @@ function AppContainer() {
     <>
       <StatusBar style={isDark ? "light" : "dark"} />
       <TabNavigator />
+      {loading && <BookLoader colors={colors} />}
     </>
   );
 }

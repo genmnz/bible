@@ -60,29 +60,77 @@ const ChapterScreen = ({ route, navigation }) => {
     addToRecentReads(bookId, chapterNumber);
 
     navigation.setOptions({
-      title: `${bookName} ${chapterNumber}`,
+      headerTitle: () => (
+        <TouchableOpacity
+          style={styles.headerTitle}
+          onPress={() => setChapterSheetVisible(true)}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Text style={styles.headerTitleText}>{bookName} {chapterNumber}</Text>
+          <Ionicons name="chevron-down" size={18} color={colors.subtext} style={{ marginLeft: 6 }} />
+        </TouchableOpacity>
+      ),
+      headerTitleAlign: 'left',
       headerRight: () => (
-        <View style={styles.headerButtons}>
+        <View style={styles.headerRightContainer}>
           <TouchableOpacity
-            style={styles.headerButton}
-            onPress={handleFavoritePress}
+            style={styles.headerNavButton}
+            onPress={() => navigateToChapter(-1)}
+            disabled={chapterNumber <= 1}
           >
             <Ionicons
-              name={isFavorite(bookId, chapterNumber) ? 'bookmark' : 'bookmark-outline'}
-              size={24}
-              color={isFavorite(bookId, chapterNumber) ? colors.primary : colors.subtext}
+              name="chevron-back"
+              size={18}
+              color={chapterNumber <= 1 ? colors.subtext : colors.primary}
             />
           </TouchableOpacity>
+
           <TouchableOpacity
-            style={styles.headerButton}
+            style={styles.headerFontButton}
+            onPress={() => adjustFontSize(-2)}
+            disabled={fontSize <= 12}
+          >
+            <Ionicons
+              name="remove"
+              size={16}
+              color={fontSize <= 12 ? colors.subtext : colors.primary}
+            />
+          </TouchableOpacity>
+          <Text style={styles.headerFontSizeText}>{fontSize}px</Text>
+          <TouchableOpacity
+            style={styles.headerFontButton}
+            onPress={() => adjustFontSize(2)}
+            disabled={fontSize >= 32}
+          >
+            <Ionicons
+              name="add"
+              size={16}
+              color={fontSize >= 32 ? colors.subtext : colors.primary}
+            />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.headerNavButton}
+            onPress={() => navigateToChapter(1)}
+            disabled={book && chapterNumber >= book.totalChapters}
+          >
+            <Ionicons
+              name="chevron-forward"
+              size={18}
+              color={book && chapterNumber >= book.totalChapters ? colors.subtext : colors.primary}
+            />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.headerIconButton}
             onPress={handleShareChapter}
           >
-            <Ionicons name="share-outline" size={24} color={colors.primary} />
+            <Ionicons name="share-outline" size={20} color={colors.primary} />
           </TouchableOpacity>
         </View>
       ),
     });
-  }, [bookId, chapterNumber, bookName]);
+  }, [bookId, chapterNumber, bookName, fontSize, colors, book?.totalChapters]);
 
   // Scroll to target verse when provided
   useEffect(() => {
@@ -484,9 +532,6 @@ const ChapterScreen = ({ route, navigation }) => {
 
   return (
     <SafeAreaView style={[styles.container, { paddingTop: headerHeight }]}>
-      {renderNavigationControls()}
-      {renderFontControls()}
-
       <ScrollView
         ref={scrollViewRef}
         style={styles.scrollView}
@@ -553,6 +598,41 @@ const makeStyles = (colors) => ({
   headerButton: {
     padding: 8,
     marginLeft: 8,
+  },
+  headerTitle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  headerTitleText: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  headerRightContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  headerNavButton: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: colors.background,
+    marginHorizontal: 4,
+  },
+  headerFontButton: {
+    padding: 6,
+    borderRadius: 6,
+    backgroundColor: colors.background,
+    marginHorizontal: 4,
+  },
+  headerFontSizeText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: colors.subtext,
+    marginHorizontal: 4,
+  },
+  headerIconButton: {
+    padding: 8,
+    marginLeft: 4,
   },
   navigationControls: {
     flexDirection: 'row',
