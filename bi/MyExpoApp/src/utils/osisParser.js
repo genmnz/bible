@@ -15,6 +15,19 @@ export const OSIS_BOOK_NAMES = {
   '1Pet': '1 Peter', '2Pet': '2 Peter', '1John': '1 John', '2John': '2 John', '3John': '3 John', Jude: 'Jude', Rev: 'Revelation'
 };
 
+export const OSIS_BOOK_NAMES_ARABIC = {
+  Gen: 'التكوين',Exod: 'الخروج',Lev: 'اللاويين',Num: 'العدد',Deut: 'التثنية',
+  Josh: 'يشوع',Judg: 'القضاة',Ruth: 'راعوث','1Sam': 'صموئيل الأول','2Sam': 'صموئيل الثاني',
+  '1Kgs': 'الملوك الأول','2Kgs': 'الملوك الثاني','1Chr': 'أخبار الأيام الأول','2Chr': 'أخبار الأيام الثاني','Ezra': 'عزرا',
+  'Neh': 'نحميا','Esth': 'أستير',Job: 'أيوب',Ps: 'المزامير',Prov: 'الأمثال',Eccl: 'الجامعة',Song: 'نشيد الأنشاد',
+  Isa: 'إشعياء',Jer: 'إرميا',Lam: 'مراثي إرميا',Ezek: 'حزقيال',Dan: 'دانيال',Hos: 'هوشع',Joel: 'يوئيل',Amos: 'عاموس',Obad: 'عوبديا',
+  Jonah: 'يونان',Mic: 'ميخا',Nah: 'ناحوم',Hab: 'حبقوق',Zeph: 'صفنيا',Hag: 'حجاي',Zech: 'زكريا',Mal: 'ملاخي',
+  Matt: 'متى',Mark: 'مرقس',Luke: 'لوقا',John: 'يوحنا',Acts: 'أعمال الرسل',
+  Rom: 'رومية','1Cor': 'كورنثوس الأولى','2Cor': 'كورنثوس الثانية',Gal: 'غلاطية',Eph: 'أفسس',Phil: 'فيلبي',
+  Col: 'كولوسي','1Thess': 'تسالونيكي الأولى','2Thess': 'تسالونيكي الثانية','1Tim': 'تيموثاوس الأول','2Tim': 'تيموثاوس الثاني',Titus: 'تيطس',Phlm: 'فليمون',Heb: 'عبرانيين',Jas: 'يعقوب','1Pet': 'بطرس الأولى','2Pet': 'بطرس الثانية','1John': 'يوحنا الأولى','2John': 'يوحنا الثانية','3John': 'يوحنا الثالثة','Jude': 'يهودا','Rev': 'سفر الرؤيا'
+};
+
+
 const parserOptions = {
   ignoreAttributes: false,
   attributeNamePrefix: '',
@@ -113,7 +126,8 @@ function parseBookDiv(bookDiv) {
   const totalVerses = chapters.reduce((acc, c) => acc + c.verses.length, 0);
   return {
     id: bookId,
-    name: OSIS_BOOK_NAMES[bookId] || bookId,
+    // Prefer XML title; otherwise fall back to OSIS name maps (EN first, then AR), then id
+    name: bookDiv.title || OSIS_BOOK_NAMES[bookId] || OSIS_BOOK_NAMES_ARABIC[bookId] || bookId,
     chapters,
     totalChapters,
     totalVerses,

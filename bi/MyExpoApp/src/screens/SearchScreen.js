@@ -11,11 +11,19 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import useHeaderScrollShadow from '../hooks/useHeaderScrollShadow';
+import { useHeaderHeight } from '@react-navigation/elements';
 
 import { useBible } from '../context/BibleContext';
+import { useThemeMode } from '../context/ThemeContext';
+import { useThemedStyles } from '../styles/useThemedStyles';
+import { makeSharedStyles } from '../styles/sharedStyles';
 
 const SearchScreen = ({ navigation }) => {
+  const { colors } = useThemeMode();
   const { searchVerses, books, BOOK_NAMES } = useBible();
+  const onScroll = useHeaderScrollShadow(navigation, { colors, threshold: 6 });
+  const headerHeight = useHeaderHeight();
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -75,6 +83,8 @@ const SearchScreen = ({ navigation }) => {
     setSearchQuery(recentSearch.query);
   };
 
+  const styles = useThemedStyles(makeStyles);
+
   const renderSearchResult = ({ item }) => (
     <TouchableOpacity
       style={styles.resultItem}
@@ -87,7 +97,7 @@ const SearchScreen = ({ navigation }) => {
             {item.bookName} {item.chapterNumber}:{item.number}
           </Text>
           <View style={styles.resultIcon}>
-            <Ionicons name="chevron-forward" size={16} color="#8B4513" />
+            <Ionicons name="chevron-forward" size={16} color={colors.primary} />
           </View>
         </View>
         <Text style={styles.resultText} numberOfLines={3}>
@@ -103,7 +113,7 @@ const SearchScreen = ({ navigation }) => {
       onPress={() => handleRecentSearchPress(item)}
       activeOpacity={0.7}
     >
-      <Ionicons name="time-outline" size={16} color="#666" />
+      <Ionicons name="time-outline" size={16} color={colors.subtext} />
       <Text style={styles.recentSearchText}>{item.query}</Text>
       <Text style={styles.recentSearchCount}>
         {item.resultsCount} results
@@ -158,7 +168,7 @@ const SearchScreen = ({ navigation }) => {
     <View style={styles.emptyState}>
       {searchQuery.trim() === '' ? (
         <>
-          <Ionicons name="search-outline" size={64} color="#ccc" />
+          <Ionicons name="search-outline" size={64} color={colors.subtext} />
           <Text style={styles.emptyTitle}>Search Scripture</Text>
           <Text style={styles.emptySubtitle}>
             Enter keywords to find verses in the Bible
@@ -166,12 +176,12 @@ const SearchScreen = ({ navigation }) => {
         </>
       ) : loading ? (
         <>
-          <ActivityIndicator size="large" color="#8B4513" />
+          <ActivityIndicator size="large" color={colors.primary} />
           <Text style={styles.emptySubtitle}>Searching...</Text>
         </>
       ) : (
         <>
-          <Ionicons name="search-outline" size={64} color="#ccc" />
+          <Ionicons name="search-outline" size={64} color={colors.subtext} />
           <Text style={styles.emptyTitle}>No results found</Text>
           <Text style={styles.emptySubtitle}>
             Try different keywords or check your spelling
@@ -184,20 +194,20 @@ const SearchScreen = ({ navigation }) => {
   const renderSearchHeader = () => (
     <View style={styles.searchHeader}>
       <View style={styles.searchContainer}>
-        <Ionicons name="search" size={20} color="#666" style={styles.searchIcon} />
+        <Ionicons name="search" size={20} color={colors.subtext} style={styles.searchIcon} />
         <TextInput
           style={styles.searchInput}
           placeholder="Search verses..."
           value={searchQuery}
           onChangeText={setSearchQuery}
-          placeholderTextColor="#666"
+          placeholderTextColor={colors.subtext}
           autoFocus={false}
           returnKeyType="search"
           onSubmitEditing={performSearch}
         />
         {searchQuery.length > 0 && (
           <TouchableOpacity onPress={clearSearch} style={styles.clearButton}>
-            <Ionicons name="close-circle" size={20} color="#666" />
+            <Ionicons name="close-circle" size={20} color={colors.subtext} />
           </TouchableOpacity>
         )}
       </View>
@@ -224,6 +234,9 @@ const SearchScreen = ({ navigation }) => {
             renderItem={renderRecentSearch}
             keyExtractor={(item) => item.id}
             showsVerticalScrollIndicator={false}
+            scrollIndicatorInsets={{ top: headerHeight }}
+            onScroll={onScroll}
+            scrollEventThrottle={16}
           />
         </View>
       );
@@ -240,13 +253,16 @@ const SearchScreen = ({ navigation }) => {
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.resultsList}
         showsVerticalScrollIndicator={false}
+        scrollIndicatorInsets={{ top: headerHeight }}
+        onScroll={onScroll}
+        scrollEventThrottle={16}
         ItemSeparatorComponent={() => <View style={styles.separator} />}
       />
     );
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView edges={['left', 'right', 'bottom']} style={[styles.container, { paddingTop: headerHeight }]}>
       {renderSearchHeader()}
       <View style={styles.content}>
         {renderContent()}
@@ -255,173 +271,41 @@ const SearchScreen = ({ navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f8f9fa',
-  },
-  searchHeader: {
-    backgroundColor: '#fff',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
-  },
-  searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#f5f5f5',
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    marginBottom: 12,
-  },
-  searchIcon: {
-    marginRight: 8,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 16,
-    color: '#333',
-  },
-  clearButton: {
-    padding: 4,
-  },
-  bookFilterContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    marginBottom: 8,
-  },
-  bookFilterLabel: {
-    fontSize: 14,
-    color: '#666',
-    marginRight: 8,
-    marginBottom: 4,
-  },
-  bookFilterButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    backgroundColor: '#f0f0f0',
-    marginRight: 8,
-    marginBottom: 4,
-  },
-  activeBookFilter: {
-    backgroundColor: '#8B4513',
-  },
-  bookFilterText: {
-    fontSize: 12,
-    color: '#666',
-    fontWeight: '500',
-  },
-  activeBookFilterText: {
-    color: '#fff',
-  },
-  resultsCount: {
-    paddingVertical: 4,
-  },
-  resultsCountText: {
-    fontSize: 14,
-    color: '#666',
-    fontWeight: '500',
-  },
-  content: {
-    flex: 1,
-  },
-  resultsList: {
-    paddingVertical: 8,
-  },
-  resultItem: {
-    backgroundColor: '#fff',
-    marginHorizontal: 16,
-    marginVertical: 4,
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  resultContent: {
-    padding: 16,
-  },
-  resultHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  resultReference: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#8B4513',
-  },
-  resultIcon: {
-    padding: 4,
-  },
-  resultText: {
-    fontSize: 16,
-    color: '#333',
-    lineHeight: 24,
-    textAlign: 'right', // For Arabic text
-  },
-  separator: {
-    height: 1,
-    backgroundColor: '#f0f0f0',
-    marginHorizontal: 16,
-  },
-  recentSearchesContainer: {
-    padding: 16,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 16,
-  },
-  recentSearchItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  recentSearchText: {
-    flex: 1,
-    fontSize: 16,
-    color: '#333',
-    marginLeft: 12,
-  },
-  recentSearchCount: {
-    fontSize: 12,
-    color: '#666',
-  },
-  emptyState: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 32,
-  },
-  emptyTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#666',
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  emptySubtitle: {
-    fontSize: 16,
-    color: '#999',
-    textAlign: 'center',
-    lineHeight: 24,
-  },
-});
+const makeStyles = (colors) => {
+  const shared = makeSharedStyles(colors);
+  return {
+    container: shared.container,
+    searchHeader: { ...shared.header, paddingHorizontal: 16, paddingVertical: 12 },
+    searchContainer: { ...shared.searchContainer, marginBottom: 12 },
+    searchIcon: shared.searchIcon,
+    searchInput: shared.searchInput,
+    clearButton: shared.clearButton,
+    bookFilterContainer: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', marginBottom: 8 },
+    bookFilterLabel: { fontSize: 14, color: colors.subtext, marginRight: 8, marginBottom: 4 },
+    bookFilterButton: shared.chip,
+    activeBookFilter: shared.chipActive,
+    bookFilterText: shared.chipText,
+    activeBookFilterText: shared.chipTextActive,
+    resultsCount: { paddingVertical: 4 },
+    resultsCountText: { fontSize: 14, color: colors.subtext, fontWeight: '500' },
+    content: { flex: 1 },
+    resultsList: { paddingVertical: 8 },
+    resultItem: shared.cardItem,
+    resultContent: shared.cardContent,
+    resultHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
+    resultReference: { fontSize: 14, fontWeight: '600', color: colors.primary },
+    resultIcon: shared.cardArrow,
+    resultText: { fontSize: 16, color: colors.text, lineHeight: 24, textAlign: 'right' },
+    separator: shared.separator,
+    recentSearchesContainer: { padding: 16 },
+    sectionTitle: { fontSize: 18, fontWeight: 'bold', color: colors.text, marginBottom: 16 },
+    recentSearchItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.card, borderRadius: 8, padding: 12, marginBottom: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2, elevation: 1 },
+    recentSearchText: { flex: 1, fontSize: 16, color: colors.text, marginLeft: 12 },
+    recentSearchCount: { fontSize: 12, color: colors.subtext },
+    emptyState: shared.emptyState,
+    emptyTitle: { ...shared.emptyTitle, color: colors.text },
+    emptySubtitle: shared.emptySubtitle,
+  };
+};
 
 export default SearchScreen;

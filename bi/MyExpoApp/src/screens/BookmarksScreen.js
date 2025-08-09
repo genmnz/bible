@@ -13,8 +13,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useBible } from '../context/BibleContext';
+import { useThemeMode } from '../context/ThemeContext';
+import { useThemedStyles } from '../styles/useThemedStyles';
+import { makeSharedStyles } from '../styles/sharedStyles';
 
 const BookmarksScreen = ({ navigation }) => {
+  const { colors } = useThemeMode();
   const {
     bookmarks,
     removeBookmark,
@@ -32,7 +36,7 @@ const BookmarksScreen = ({ navigation }) => {
       screen: 'Chapter',
       params: {
         bookId: bookmark.bookId,
-        bookName: bookmark.bookName,
+        bookName: BOOK_NAMES[bookmark.bookId] || bookmark.bookName,
         chapterNumber: bookmark.chapterNumber,
       },
     });
@@ -41,7 +45,7 @@ const BookmarksScreen = ({ navigation }) => {
   const handleDeleteBookmark = (bookmark) => {
     Alert.alert(
       'Delete Bookmark',
-      `Remove bookmark for ${bookmark.bookName} ${bookmark.chapterNumber}?`,
+      `Remove bookmark for ${BOOK_NAMES[bookmark.bookId] || bookmark.bookName} ${bookmark.chapterNumber}?`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -72,6 +76,8 @@ const BookmarksScreen = ({ navigation }) => {
     }
   };
 
+  const styles = useThemedStyles(makeStyles);
+
   const renderBookmarkItem = ({ item }) => {
     const book = getBook(item.bookId);
     const totalChapters = book?.totalChapters || 0;
@@ -84,12 +90,12 @@ const BookmarksScreen = ({ navigation }) => {
       >
         <View style={styles.bookmarkContent}>
           <View style={styles.bookmarkIcon}>
-            <Ionicons name="bookmark" size={24} color="#4CAF50" />
+            <Ionicons name="bookmark" size={24} color={colors.success} />
           </View>
 
           <View style={styles.bookmarkInfo}>
             <Text style={styles.bookmarkTitle}>
-              {item.bookName} {item.chapterNumber}
+              {BOOK_NAMES[item.bookId] || item.bookName} {item.chapterNumber}
             </Text>
             <Text style={styles.bookmarkProgress}>
               Chapter {item.chapterNumber} of {totalChapters}
@@ -109,13 +115,13 @@ const BookmarksScreen = ({ navigation }) => {
               style={styles.actionButton}
               onPress={() => handleEditBookmark(item)}
             >
-              <Ionicons name="create-outline" size={20} color="#8B4513" />
+              <Ionicons name="create-outline" size={20} color={colors.primary} />
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.actionButton}
               onPress={() => handleDeleteBookmark(item)}
             >
-              <Ionicons name="trash-outline" size={20} color="#FF3B30" />
+              <Ionicons name="trash-outline" size={20} color={colors.danger} />
             </TouchableOpacity>
           </View>
         </View>
@@ -127,7 +133,7 @@ const BookmarksScreen = ({ navigation }) => {
     <View style={styles.header}>
       <View style={styles.headerContent}>
         <View style={styles.titleContainer}>
-          <Ionicons name="bookmark" size={32} color="#4CAF50" />
+          <Ionicons name="bookmark" size={32} color={colors.success} />
           <View style={styles.headerText}>
             <Text style={styles.title}>Bookmarks</Text>
             <Text style={styles.subtitle}>
@@ -141,7 +147,7 @@ const BookmarksScreen = ({ navigation }) => {
 
   const renderEmptyState = () => (
     <View style={styles.emptyState}>
-      <Ionicons name="bookmark-outline" size={80} color="#ccc" />
+      <Ionicons name="bookmark-outline" size={80} color={colors.subtext} />
       <Text style={styles.emptyTitle}>No bookmarks yet</Text>
       <Text style={styles.emptySubtitle}>
         Bookmark chapters while reading to save them here
@@ -170,14 +176,14 @@ const BookmarksScreen = ({ navigation }) => {
               Edit Bookmark
             </Text>
             <TouchableOpacity onPress={() => setEditModalVisible(false)}>
-              <Ionicons name="close" size={24} color="#666" />
+              <Ionicons name="close" size={24} color={colors.subtext} />
             </TouchableOpacity>
           </View>
 
           {editingBookmark && (
             <View style={styles.modalBody}>
               <Text style={styles.bookmarkReference}>
-                {editingBookmark.bookName} {editingBookmark.chapterNumber}
+                {BOOK_NAMES[editingBookmark.bookId] || editingBookmark.bookName} {editingBookmark.chapterNumber}
               </Text>
 
               <Text style={styles.inputLabel}>Note (Optional)</Text>
@@ -186,7 +192,7 @@ const BookmarksScreen = ({ navigation }) => {
                 value={editNote}
                 onChangeText={setEditNote}
                 placeholder="Add a note about this chapter..."
-                placeholderTextColor="#666"
+                placeholderTextColor={colors.subtext}
                 multiline
                 numberOfLines={4}
                 textAlignVertical="top"
@@ -234,224 +240,53 @@ const BookmarksScreen = ({ navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f8f9fa',
-  },
-  listContainer: {
-    paddingBottom: 16,
-  },
-  emptyListContainer: {
-    flex: 1,
-  },
-  header: {
-    backgroundColor: '#fff',
-    padding: 16,
-    marginBottom: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
-  },
-  headerContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  headerText: {
-    marginLeft: 16,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 4,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#666',
-  },
-  bookmarkItem: {
-    backgroundColor: '#fff',
-    marginHorizontal: 16,
-    marginVertical: 4,
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  bookmarkContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-  },
-  bookmarkIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    backgroundColor: '#E8F5E8',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 16,
-  },
-  bookmarkInfo: {
-    flex: 1,
-  },
-  bookmarkTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 4,
-  },
-  bookmarkProgress: {
-    fontSize: 14,
-    color: '#4CAF50',
-    fontWeight: '500',
-    marginBottom: 4,
-  },
-  bookmarkNote: {
-    fontSize: 14,
-    color: '#666',
-    fontStyle: 'italic',
-    marginBottom: 4,
-  },
-  bookmarkDate: {
-    fontSize: 12,
-    color: '#999',
-  },
-  bookmarkActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  actionButton: {
-    padding: 8,
-    marginLeft: 4,
-    borderRadius: 6,
-    backgroundColor: '#f5f5f5',
-  },
-  separator: {
-    height: 1,
-    backgroundColor: '#f0f0f0',
-    marginHorizontal: 16,
-  },
-  emptyState: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 32,
-  },
-  emptyTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#666',
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  emptySubtitle: {
-    fontSize: 16,
-    color: '#999',
-    textAlign: 'center',
-    lineHeight: 24,
-    marginBottom: 24,
-  },
-  browseButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#4CAF50',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 24,
-  },
-  browseButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 8,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalContent: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    margin: 20,
-    width: '90%',
-    maxHeight: '80%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  modalBody: {
-    padding: 16,
-  },
-  bookmarkReference: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#4CAF50',
-    marginBottom: 16,
-    textAlign: 'center',
-  },
-  inputLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 8,
-  },
-  noteInput: {
-    backgroundColor: '#f5f5f5',
-    borderRadius: 12,
-    padding: 12,
-    fontSize: 16,
-    color: '#333',
-    height: 100,
-    marginBottom: 24,
-  },
-  modalActions: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  cancelButton: {
-    flex: 0.45,
-    backgroundColor: '#f0f0f0',
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  cancelButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#666',
-  },
-  saveButton: {
-    flex: 0.45,
-    backgroundColor: '#4CAF50',
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  saveButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#fff',
-  },
-});
+const makeStyles = (colors) => {
+  const shared = makeSharedStyles(colors);
+  return {
+    container: shared.container,
+    listContainer: { paddingBottom: 16 },
+    emptyListContainer: { flex: 1 },
+    header: { ...shared.header, padding: 16, marginBottom: 8 },
+    headerContent: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    titleContainer: { flexDirection: 'row', alignItems: 'center' },
+    headerText: { marginLeft: 16 },
+    title: { fontSize: 28, fontWeight: 'bold', color: colors.text, marginBottom: 4 },
+    subtitle: { fontSize: 16, color: colors.subtext },
+    bookmarkItem: shared.cardItem,
+    bookmarkContent: { ...shared.cardContent, flexDirection: 'row', alignItems: 'center' },
+    bookmarkIcon: { ...shared.cardIcon, backgroundColor: colors.success + '20' },
+    bookmarkInfo: { flex: 1 },
+    bookmarkTitle: { fontSize: 18, fontWeight: '600', color: colors.text, marginBottom: 4 },
+    bookmarkProgress: { fontSize: 14, color: colors.success, fontWeight: '500', marginBottom: 4 },
+    bookmarkNote: { fontSize: 14, color: colors.subtext, fontStyle: 'italic', marginBottom: 4 },
+    bookmarkDate: { fontSize: 12, color: colors.subtext },
+    bookmarkActions: { flexDirection: 'row', alignItems: 'center' },
+    actionButton: { padding: 8, marginLeft: 4, borderRadius: 6, backgroundColor: colors.background },
+    separator: shared.separator,
+    emptyState: shared.emptyState,
+    emptyTitle: shared.emptyTitle,
+    emptySubtitle: { ...shared.emptySubtitle, marginBottom: 24 },
+    browseButton: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.primary, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 24 },
+    browseButtonText: { color: '#fff', fontSize: 16, fontWeight: '600', marginLeft: 8 },
+    // Modal
+    modalOverlay: shared.modalOverlay,
+    modalContent: { ...shared.modalCard, width: '90%', maxHeight: '80%' },
+    modalHeader: shared.modalHeader,
+    modalTitle: { ...shared.modalTitle, fontSize: 20, fontWeight: 'bold' },
+    modalBody: { padding: 16 },
+    bookmarkReference: { fontSize: 18, fontWeight: '600', color: colors.primary, marginBottom: 16, textAlign: 'center' },
+    inputLabel: { fontSize: 16, fontWeight: '600', color: colors.text, marginBottom: 8 },
+    noteInput: { backgroundColor: colors.background, borderRadius: 12, padding: 12, fontSize: 16, color: colors.text, height: 100, marginBottom: 24, borderWidth: 1, borderColor: colors.border },
+    modalActions: { flexDirection: 'row', justifyContent: 'space-between' },
+    cancelButton: { flex: 0.45, backgroundColor: colors.background, paddingVertical: 12, borderRadius: 8, alignItems: 'center' },
+    cancelButtonText: { fontSize: 16, fontWeight: '600', color: colors.text },
+    saveButton: { flex: 0.45, backgroundColor: colors.primary, paddingVertical: 12, borderRadius: 8, alignItems: 'center' },
+    saveButtonText: { fontSize: 16, fontWeight: '600', color: '#fff' },
+  };
+};
 
 export default BookmarksScreen;

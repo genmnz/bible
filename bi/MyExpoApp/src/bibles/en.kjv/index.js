@@ -1,7 +1,7 @@
-// Static manifest mapping OSIS book IDs to bundled XML assets for Expo/React Native
-// We use static require() so Metro can bundle these files as assets
+// English KJV per-book asset manifest for Expo/React Native
+// Static require() so Metro bundles XML files
 
-export const ARASVD_BOOK_ASSETS = {
+export const KJV_BOOK_ASSETS = {
   Gen: require('./gen.xml'),
   Exod: require('./exod.xml'),
   Lev: require('./lev.xml'),
@@ -14,7 +14,7 @@ export const ARASVD_BOOK_ASSETS = {
   '2Sam': require('./2sam.xml'),
   '1Kgs': require('./1kgs.xml'),
   '2Kgs': require('./2kgs.xml'),
-  // '1Chr': require('./1chr.xml'),
+  '1Chr': require('./1chr.xml'),
   '2Chr': require('./2chr.xml'),
   Ezra: require('./ezra.xml'),
   Neh: require('./neh.xml'),
@@ -70,7 +70,7 @@ export const ARASVD_BOOK_ASSETS = {
   Rev: require('./rev.xml'),
 };
 
-export const ARASVD_ORDER = [
+export const KJV_ORDER = [
   'Gen','Exod','Lev','Num','Deut','Josh','Judg','Ruth','1Sam','2Sam','1Kgs','2Kgs','1Chr','2Chr',
   'Ezra','Neh','Esth','Job','Ps','Prov','Eccl','Song','Isa','Jer','Lam','Ezek','Dan','Hos','Joel',
   'Amos','Obad','Jonah','Mic','Nah','Hab','Zeph','Hag','Zech','Mal',

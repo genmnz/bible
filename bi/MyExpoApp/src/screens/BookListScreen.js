@@ -1,22 +1,33 @@
 import React, { useState, useMemo } from 'react';
 import {
   View,
-  StyleSheet,
   FlatList,
   TouchableOpacity,
   Text,
   TextInput,
   ActivityIndicator,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import useHeaderScrollShadow from '../hooks/useHeaderScrollShadow';
+import { useHeaderHeight } from '@react-navigation/elements';
 
 import { useBible } from '../context/BibleContext';
 
+import { useThemeMode } from '../context/ThemeContext';
+import { useThemedStyles } from '../styles/useThemedStyles';
+import { makeSharedStyles } from '../styles/sharedStyles';
+
 const BookListScreen = ({ navigation }) => {
-  const { books, loading } = useBible();
+  const { books, loading, BOOK_NAMES } = useBible();
+  const { colors } = useThemeMode();
+  const onScroll = useHeaderScrollShadow(navigation, { colors, threshold: 6 });
+  const headerHeight = useHeaderHeight();
+  const styles = useThemedStyles(makeStyles);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTestament, setSelectedTestament] = useState('all'); // 'all', 'old', 'new'
+  const [chapterPickerBook, setChapterPickerBook] = useState(null);
 
   // Old Testament books (first 39 books)
   const oldTestamentBooks = [
@@ -40,20 +51,28 @@ const BookListScreen = ({ navigation }) => {
     // Filter by search query
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(book =>
-        book.name.toLowerCase().includes(query) ||
-        book.id.toLowerCase().includes(query)
-      );
+      filtered = filtered.filter(book => {
+        const localizedName = (BOOK_NAMES[book.id] || book.name || '').toLowerCase();
+        return localizedName.includes(query) || book.id.toLowerCase().includes(query);
+      });
     }
 
     return filtered;
-  }, [books, searchQuery, selectedTestament]);
+  }, [books, BOOK_NAMES, searchQuery, selectedTestament]);
 
   const handleBookPress = (book) => {
+    // Open chapter picker modal instead of navigating immediately
+    setChapterPickerBook(book);
+  };
+
+  const handleChapterSelect = (chapterNumber) => {
+    if (!chapterPickerBook) return;
+    const b = chapterPickerBook;
+    setChapterPickerBook(null);
     navigation.navigate('Chapter', {
-      bookId: book.id,
-      bookName: book.name,
-      chapterNumber: 1,
+      bookId: b.id,
+      bookName: BOOK_NAMES[b.id] || b.name,
+      chapterNumber,
     });
   };
 
@@ -97,13 +116,13 @@ const BookListScreen = ({ navigation }) => {
         <View style={styles.bookContent}>
           <View style={[
             styles.bookIcon,
-            { backgroundColor: isOldTestament ? '#8B4513' : '#4CAF50' }
+            { backgroundColor: isOldTestament ? '#5095ff' : '#4CAF50' }
           ]}>
             <Ionicons name="book" size={24} color="#fff" />
           </View>
 
           <View style={styles.bookInfo}>
-            <Text style={styles.bookName}>{item.name}</Text>
+            <Text style={styles.bookName}>{BOOK_NAMES[item.id] || item.name}</Text>
             <View style={styles.bookMeta}>
               <Text style={styles.bookTestament}>
                 {isOldTestament ? 'Old Testament' : 'New Testament'}
@@ -171,17 +190,63 @@ const BookListScreen = ({ navigation }) => {
     </View>
   );
 
+  const renderChapterPicker = () => {
+    if (!chapterPickerBook) return null;
+    const count = chapterPickerBook.totalChapters || 1;
+    const data = Array.from({ length: count }, (_, i) => i + 1);
+    return (
+      <Modal
+        transparent
+        animationType="fade"
+        visible={!!chapterPickerBook}
+        onRequestClose={() => setChapterPickerBook(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>
+                {`Select chapter — ${BOOK_NAMES[chapterPickerBook.id] || chapterPickerBook.name}`}
+              </Text>
+              <TouchableOpacity style={styles.headerButton} onPress={() => setChapterPickerBook(null)}>
+                <Ionicons name="close" size={24} color={colors.text} />
+              </TouchableOpacity>
+            </View>
+            <View style={{ padding: 16 }}>
+              <FlatList
+                data={data}
+                keyExtractor={(n) => String(n)}
+                numColumns={5}
+                renderItem={({ item: chapter }) => (
+                  <TouchableOpacity
+                    style={styles.chapterChip}
+                    onPress={() => handleChapterSelect(chapter)}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.chapterChipText}>{chapter}</Text>
+                  </TouchableOpacity>
+                )}
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={styles.chapterGrid}
+              />
+            </View>
+          </View>
+        </View>
+      </Modal>
+    );
+  };
+
+
   if (loading) {
     return (
-      <SafeAreaView style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#8B4513" />
+      <SafeAreaView style={[styles.loadingContainer, { paddingTop: headerHeight }]}>
+        <ActivityIndicator size="large" color={colors.primary} />
         <Text style={styles.loadingText}>Loading books...</Text>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { paddingTop: headerHeight }]}>
       <FlatList
         data={filteredBooks}
         renderItem={renderBookItem}
@@ -193,178 +258,128 @@ const BookListScreen = ({ navigation }) => {
           filteredBooks.length === 0 && styles.emptyListContainer,
         ]}
         showsVerticalScrollIndicator={false}
+        scrollIndicatorInsets={{ top: headerHeight }}
+        onScroll={onScroll}
+        scrollEventThrottle={16}
         ItemSeparatorComponent={() => <View style={styles.separator} />}
       />
+      {renderChapterPicker()}
     </SafeAreaView>
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f8f9fa',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#f8f9fa',
-  },
-  loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: '#666',
-  },
-  listContainer: {
-    paddingBottom: 16,
-  },
-  emptyListContainer: {
-    flex: 1,
-  },
-  header: {
-    backgroundColor: '#fff',
-    padding: 16,
-    marginBottom: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 4,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#666',
-    marginBottom: 16,
-  },
-  searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#f5f5f5',
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    marginBottom: 16,
-  },
-  searchIcon: {
-    marginRight: 8,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 16,
-    color: '#333',
-  },
-  testamentFilter: {
-    flexDirection: 'row',
-    backgroundColor: '#f5f5f5',
-    borderRadius: 8,
-    padding: 4,
-  },
-  testamentButton: {
-    flex: 1,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 6,
-    alignItems: 'center',
-  },
-  activeTestamentButton: {
-    backgroundColor: '#8B4513',
-  },
-  testamentButtonText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#666',
-  },
-  activeTestamentButtonText: {
-    color: '#fff',
-  },
-  bookItem: {
-    backgroundColor: '#fff',
-    marginHorizontal: 16,
-    marginVertical: 4,
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  bookContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-  },
-  bookIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 16,
-  },
-  bookInfo: {
-    flex: 1,
-  },
-  bookName: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 4,
-  },
-  bookMeta: {
-    flexDirection: 'column',
-  },
-  bookTestament: {
-    fontSize: 14,
-    color: '#8B4513',
-    fontWeight: '500',
-    marginBottom: 2,
-  },
-  bookStats: {
-    fontSize: 12,
-    color: '#666',
-  },
-  bookArrow: {
-    padding: 4,
-  },
-  separator: {
-    height: 1,
-    backgroundColor: '#f0f0f0',
-    marginHorizontal: 16,
-  },
-  emptyState: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 32,
-  },
-  emptyTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#666',
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  emptySubtitle: {
-    fontSize: 16,
-    color: '#999',
-    textAlign: 'center',
-    lineHeight: 24,
-    marginBottom: 24,
-  },
-  clearSearchButton: {
-    backgroundColor: '#8B4513',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 24,
-  },
-  clearSearchText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-});
+    const makeStyles = (colors) => {
+        const shared = makeSharedStyles(colors);
+        return {
+            container: shared.container,
+            loadingContainer: shared.loadingContainer,
+            loadingText: shared.loadingText,
+            listContainer: shared.listContainer,
+            emptyListContainer: shared.emptyListContainer,
+            header: {
+                ...shared.header,
+                padding: 16,
+                marginBottom: 8,
+            },
+            title: {
+                fontSize: 28,
+                fontWeight: 'bold',
+                color: colors.text,
+                marginBottom: 4,
+            },
+            subtitle: {
+                fontSize: 16,
+                color: colors.subtext,
+                marginBottom: 16,
+            },
+            searchContainer: {
+                ...shared.searchContainer,
+                marginBottom: 16,
+            },
+            searchIcon: shared.searchIcon,
+            searchInput: shared.searchInput,
+            testamentFilter: {
+                flexDirection: 'row',
+                backgroundColor: colors.background,
+                borderRadius: 8,
+                padding: 4,
+            },
+            testamentButton: {
+                ...shared.chip,
+                flex: 1,
+                alignItems: 'center',
+            },
+            activeTestamentButton: shared.chipActive,
+            testamentButtonText: {
+                ...shared.chipText,
+                fontSize: 14,
+            },
+            activeTestamentButtonText: shared.chipTextActive,
+            bookItem: shared.cardItem,
+            bookContent: {
+                ...shared.cardContent,
+                flexDirection: 'row',
+                alignItems: 'center',
+            },
+            bookIcon: shared.cardIcon,
+            bookInfo: {
+                flex: 1,
+            },
+            bookName: {
+                fontSize: 18,
+                fontWeight: '600',
+                color: colors.text,
+                marginBottom: 4,
+            },
+            bookMeta: {
+                flexDirection: 'column',
+            },
+            bookTestament: {
+                fontSize: 14,
+                color: colors.primary,
+                fontWeight: '500',
+                marginBottom: 2,
+            },
+            bookStats: {
+                fontSize: 12,
+                color: colors.subtext,
+            },
+            bookArrow: shared.cardArrow,
+            separator: shared.separator,
+            emptyState: shared.emptyState,
+            emptyTitle: shared.emptyTitle,
+            emptySubtitle: {
+                ...shared.emptySubtitle,
+                marginBottom: 24,
+            },
+            clearSearchButton: {
+                backgroundColor: colors.primary,
+                paddingHorizontal: 24,
+                paddingVertical: 12,
+                borderRadius: 24,
+            },
+            clearSearchText: {
+                color: '#fff',
+                fontSize: 16,
+                fontWeight: '600',
+            },
+            // Modal styles reusing shared fragments
+            modalOverlay: shared.modalOverlay,
+            modalCard: {
+                ...shared.modalCard,
+                width: '92%',
+                maxWidth: 520,
+            },
+            modalHeader: shared.modalHeader,
+            modalTitle: shared.modalTitle,
+            headerButton: shared.headerButton,
+            // Chapter chips grid
+            chapterGrid: shared.chapterGrid,
+            chapterChip: shared.chapterChip,
+            chapterChipText: shared.chapterChipText,
+        };
+    };
+  
+
 
 export default BookListScreen;

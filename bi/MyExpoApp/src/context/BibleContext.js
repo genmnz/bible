@@ -2,8 +2,11 @@ import React, { createContext, useState, useEffect, useContext } from 'react';
 import { Asset } from 'expo-asset';
 import * as FileSystem from 'expo-file-system';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { parseOsisXmlString, parseOsisBookXmlString, OSIS_BOOK_NAMES } from '../utils/osisParser';
+import { parseOsisBookXmlString, OSIS_BOOK_NAMES, OSIS_BOOK_NAMES_ARABIC } from '../utils/osisParser';
 import { ARASVD_BOOK_ASSETS, ARASVD_ORDER } from '../bibles/arasvd';
+import { KJV_BOOK_ASSETS, KJV_ORDER } from '../bibles/en.kjv';
+import { useLocale } from './LocaleContext';
+import { InteractionManager } from 'react-native';
 
 const BibleContext = createContext();
 
@@ -12,8 +15,9 @@ export const BibleProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [recentReads, setRecentReads] = useState([]);
   const [favorites, setFavorites] = useState([]);
-  const [bookmarks, setBookmarks] = useState([]);
   const [BOOK_NAMES, setBOOK_NAMES] = useState({});
+  const { language } = useLocale();
+  const [version, setVersionState] = useState('arasvd'); // 'arasvd' | 'kjv'
 
   const readAssetAsString = async (asset) => {
     try {
@@ -36,45 +40,32 @@ export const BibleProvider = ({ children }) => {
     const loadBibleData = async () => {
       try {
         const loadedBooks = [];
-        // Primary source: split per-book XMLs bundled in src/bibles/arasvd/
-        for (const bookId of ARASVD_ORDER) {
-          const mod = ARASVD_BOOK_ASSETS[bookId];
+        // Load split per-book XMLs for selected version (independent of UI language)
+        const usingArabic = version === 'arasvd';
+        const ORDER = usingArabic ? ARASVD_ORDER : KJV_ORDER;
+        const ASSETS = usingArabic ? ARASVD_BOOK_ASSETS : KJV_BOOK_ASSETS;
+        for (const bookId of ORDER) {
+          const mod = ASSETS[bookId];
           if (!mod) continue; // Skip missing files
           try {
             const asset = Asset.fromModule(mod);
             const xmlString = await readAssetAsString(asset);
             const book = parseOsisBookXmlString(xmlString);
             loadedBooks.push(book);
+            // Yield to UI thread to keep app responsive during bulk parsing
+            await new Promise((r) => setTimeout(r, 0));
           } catch (e) {
             console.warn(`Failed to load ${bookId}:`, e?.message || e);
           }
         }
 
-        // Fallback: parse the single monolithic OSIS file if nothing loaded
-        // or use it to fill any missing books from split assets
-        try {
-          const needed = ARASVD_ORDER.filter(id => !loadedBooks.some(b => b.id === id));
-          if (loadedBooks.length === 0 || needed.length > 0) {
-            const asset = Asset.fromModule(require('../../assets/bible/arasvd.xml'));
-            const xmlString = await readAssetAsString(asset);
-            const parsed = parseOsisXmlString(xmlString);
-            if (loadedBooks.length === 0) {
-              loadedBooks.push(...parsed);
-            } else if (needed.length > 0) {
-              for (const id of needed) {
-                const found = parsed.find(b => b.id === id);
-                if (found) loadedBooks.push(found);
-              }
-              // keep canonical order
-              loadedBooks.sort((a, b) => ARASVD_ORDER.indexOf(a.id) - ARASVD_ORDER.indexOf(b.id));
-            }
-          }
-        } catch (fallbackErr) {
-          console.error('OSIS parse (fallback/fill) failed:', fallbackErr);
-        }
-
         setBooks(loadedBooks);
-        setBOOK_NAMES(OSIS_BOOK_NAMES);
+        // Build localized book name map from OSIS name dictionaries based on UI language
+        const dict = language === 'ar' ? OSIS_BOOK_NAMES_ARABIC : OSIS_BOOK_NAMES;
+        const namesMap = Object.fromEntries(
+          loadedBooks.map((b) => [b.id, dict[b.id] || b.name || b.id])
+        );
+        setBOOK_NAMES(namesMap);
       } catch (error) {
         console.error('Error loading Bible:', error);
       } finally {
@@ -87,15 +78,71 @@ export const BibleProvider = ({ children }) => {
       if (storedRecentReads) setRecentReads(JSON.parse(storedRecentReads));
 
       const storedFavorites = await AsyncStorage.getItem('favorites');
-      if (storedFavorites) setFavorites(JSON.parse(storedFavorites));
+      if (storedFavorites) {
+        try {
+          const raw = JSON.parse(storedFavorites) || [];
+          // Sanitize: keep only items with full location and normalize id as book.chapter.verse
+          const cleaned = Array.isArray(raw)
+            ? raw
+                .filter((f) => f && f.bookId && f.chapterNumber && f.verseNumber)
+                .map((f) => ({
+                  ...f,
+                  id: `${f.bookId}.${f.chapterNumber}.${f.verseNumber}`,
+                }))
+            : [];
+          setFavorites(cleaned);
+          // Persist back the cleaned list to avoid future undefineds
+          await AsyncStorage.setItem('favorites', JSON.stringify(cleaned));
+        } catch (e) {
+          console.warn('Failed to parse favorites; resetting list');
+          setFavorites([]);
+          await AsyncStorage.setItem('favorites', JSON.stringify([]));
+        }
+      }
 
-      const storedBookmarks = await AsyncStorage.getItem('bookmarks');
-      if (storedBookmarks) setBookmarks(JSON.parse(storedBookmarks));
+      // Determine Bible version from UI language and persist it
+      // We intentionally override any mismatched stored value to ensure content matches UI language
+      const desiredVersion = language === 'ar' ? 'arasvd' : 'kjv';
+      setVersionState(desiredVersion);
+      try { await AsyncStorage.setItem('bibleVersion', desiredVersion); } catch {}
     };
 
-    loadBibleData();
+    setLoading(true);
+    const interactionTask = InteractionManager.runAfterInteractions(() => {
+      // Kick off heavy parsing work after initial interactions for faster perceived load
+      return loadBibleData();
+    });
     loadUserData();
-  }, []);
+    return () => {
+      // Cancel if possible
+      interactionTask && interactionTask.cancel && interactionTask.cancel();
+    };
+  }, [version]);
+
+  // Rebuild localized book names when UI language changes without re-parsing XML
+  useEffect(() => {
+    const dict = language === 'ar' ? OSIS_BOOK_NAMES_ARABIC : OSIS_BOOK_NAMES;
+    const namesMap = Object.fromEntries(
+      books.map((b) => [b.id, dict[b.id] || b.name || b.id])
+    );
+    setBOOK_NAMES(namesMap);
+  }, [language, books]);
+
+  // Ensure the Bible version follows the selected UI language (ARASVD for Arabic, KJV for English)
+  useEffect(() => {
+    const desired = language === 'ar' ? 'arasvd' : 'kjv';
+    if (version !== desired) {
+      // Use the provided setter to keep AsyncStorage in sync and trigger reload
+      setVersion(desired);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [language]);
+
+  const setVersion = async (next) => {
+    setLoading(true);
+    setVersionState(next);
+    try { await AsyncStorage.setItem('bibleVersion', next); } catch {}
+  };
 
   const getChapter = (bookId, chapterNumber) => {
     const book = books.find((b) => b.id === bookId);
@@ -144,45 +191,62 @@ export const BibleProvider = ({ children }) => {
   };
 
   const addToFavorites = async (verseId, bookId, chapterNumber, verseNumber, text) => {
-    const newFavorite = { id: verseId, bookId, chapterNumber, verseNumber, text, addedAt: Date.now() };
+    // Guard against incorrect callers (e.g., passed only book/chapter)
+    if (!bookId || !chapterNumber || !verseNumber) {
+      console.warn('addToFavorites requires (verseId, bookId, chapterNumber, verseNumber, text)');
+      return;
+    }
+    const id = `${bookId}.${chapterNumber}.${verseNumber}`;
+    const newFavorite = { id, bookId, chapterNumber, verseNumber, text, addedAt: Date.now() };
     const updatedFavorites = [...favorites, newFavorite];
     setFavorites(updatedFavorites);
     await AsyncStorage.setItem('favorites', JSON.stringify(updatedFavorites));
   };
 
   const removeFromFavorites = async (verseId) => {
-    const updatedFavorites = favorites.filter(f => f.id !== verseId);
+    let updatedFavorites = favorites;
+    if (typeof verseId === 'string' && verseId.includes('.')) {
+      const parts = verseId.split('.');
+      if (parts.length === 2) {
+        // Treat as chapter-level removal: remove all in that chapter
+        const [bookId, chStr] = parts;
+        const chNum = Number(chStr);
+        updatedFavorites = favorites.filter(
+          (f) => !(f.bookId === bookId && f.chapterNumber === chNum)
+        );
+      } else if (parts.length >= 3) {
+        updatedFavorites = favorites.filter((f) => f.id !== verseId);
+      } else {
+        updatedFavorites = favorites.filter((f) => f.id !== verseId);
+      }
+    } else {
+      updatedFavorites = favorites.filter((f) => f.id !== verseId);
+    }
     setFavorites(updatedFavorites);
     await AsyncStorage.setItem('favorites', JSON.stringify(updatedFavorites));
   };
 
-  const isFavorite = (verseId) => {
-    return favorites.some(f => f.id === verseId);
+  const clearFavorites = async () => {
+    setFavorites([]);
+    await AsyncStorage.setItem('favorites', JSON.stringify([]));
   };
 
-  const addBookmark = async (bookId, chapterNumber, note = '') => {
-    const newBookmark = { id: `${bookId}.${chapterNumber}`, bookId, bookName: BOOK_NAMES[bookId] || bookId, chapterNumber, note, addedAt: Date.now() };
-    const updatedBookmarks = [...bookmarks.filter(b => b.id !== newBookmark.id), newBookmark];
-    setBookmarks(updatedBookmarks);
-    await AsyncStorage.setItem('bookmarks', JSON.stringify(updatedBookmarks));
+  const isFavorite = (idOrBook, chapterMaybe) => {
+    if (chapterMaybe !== undefined) {
+      const bookId = idOrBook;
+      const chapterNumber = Number(chapterMaybe);
+      return favorites.some((f) => f.bookId === bookId && f.chapterNumber === chapterNumber);
+    }
+    return favorites.some((f) => f.id === idOrBook);
   };
 
-  const removeBookmark = async (bookmarkId) => {
-    const updatedBookmarks = bookmarks.filter(b => b.id !== bookmarkId);
-    setBookmarks(updatedBookmarks);
-    await AsyncStorage.setItem('bookmarks', JSON.stringify(updatedBookmarks));
-  };
-
-  const isBookmarked = (bookId, chapterNumber) => {
-    return bookmarks.some(b => b.bookId === bookId && b.chapterNumber === chapterNumber);
-  };
+  // Bookmarks removed: chapters can be accessed via recent reads; users can favorite individual verses
 
   const getStats = () => {
     return {
       totalBooks: books.length,
       totalChapters: books.reduce((acc, book) => acc + book.totalChapters, 0),
       favorites: favorites.length,
-      bookmarks: bookmarks.length,
     };
   };
 
@@ -193,19 +257,18 @@ export const BibleProvider = ({ children }) => {
         loading,
         recentReads,
         favorites,
-        bookmarks,
         getStats,
         addToRecentReads,
         getChapter,
         addToFavorites,
         removeFromFavorites,
+        clearFavorites,
         isFavorite,
-        addBookmark,
-        removeBookmark,
-        isBookmarked,
         getBook,
         searchVerses,
         BOOK_NAMES,
+        version,
+        setVersion,
       }}
     >
       {children}

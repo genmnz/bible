@@ -7,19 +7,24 @@ import {
   Text,
   Switch,
   Alert,
-  Linking,
   Share,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
-import { useGallery } from '../context/GalleryContext';
-import { useFavorites } from '../context/FavoritesContext';
+import { useLocale } from '../context/LocaleContext';
+import { useBible } from '../context/BibleContext';
+import { useThemeMode } from '../context/ThemeContext';
+import { useThemedStyles } from '../styles/useThemedStyles';
+import useHeaderScrollShadow from '../hooks/useHeaderScrollShadow';
+import { useHeaderHeight } from '@react-navigation/elements';
 
 const SettingsScreen = ({ navigation }) => {
-  const { getImageStats, refreshGallery } = useGallery();
-  const { clearAllFavorites, exportFavorites, getFavoritesStats } = useFavorites();
+  const { t, language, setLanguage } = useLocale();
+  const { getStats, favorites } = useBible();
+  const { mode, setMode, colors } = useThemeMode();
+  const onScroll = useHeaderScrollShadow(navigation, { colors, threshold: 6 });
+  const headerHeight = useHeaderHeight();
 
   const [settings, setSettings] = useState({
     autoBackup: false,
@@ -30,8 +35,7 @@ const SettingsScreen = ({ navigation }) => {
     autoOrganize: true,
   });
 
-  const stats = getImageStats();
-  const favStats = getFavoritesStats();
+  const stats = getStats();
 
   const updateSetting = async (key, value) => {
     const newSettings = { ...settings, [key]: value };
@@ -46,11 +50,10 @@ const SettingsScreen = ({ navigation }) => {
 
   const handleExportFavorites = async () => {
     try {
-      const favoritesData = exportFavorites();
+      const favoritesData = favorites || [];
       const jsonString = JSON.stringify(favoritesData, null, 2);
-
       await Share.share({
-        message: `My Gallery App Favorites:\n\n${jsonString}`,
+        message: jsonString,
         title: 'Export Favorites',
       });
     } catch (error) {
@@ -87,7 +90,6 @@ const SettingsScreen = ({ navigation }) => {
           onPress: async () => {
             try {
               await AsyncStorage.clear();
-              await clearAllFavorites();
               Alert.alert('Success', 'App has been reset');
             } catch (error) {
               Alert.alert('Error', 'Failed to reset app');
@@ -126,6 +128,8 @@ const SettingsScreen = ({ navigation }) => {
     }
   };
 
+  const styles = useThemedStyles(makeStyles);
+
   const renderSection = (title, children) => (
     <View style={styles.section}>
       <Text style={styles.sectionTitle}>{title}</Text>
@@ -137,7 +141,7 @@ const SettingsScreen = ({ navigation }) => {
     <View style={styles.settingRow}>
       <View style={styles.settingLeft}>
         <View style={styles.settingIcon}>
-          <Ionicons name={icon} size={20} color="#007AFF" />
+          <Ionicons name={icon} size={20} color={colors.primary} />
         </View>
         <View style={styles.settingInfo}>
           <Text style={styles.settingTitle}>{title}</Text>
@@ -148,7 +152,7 @@ const SettingsScreen = ({ navigation }) => {
         <Switch
           value={value}
           onValueChange={onValueChange}
-          trackColor={{ false: '#767577', true: '#007AFF' }}
+          trackColor={{ false: '#767577', true: colors.primary }}
           thumbColor={value ? '#fff' : '#f4f3f4'}
         />
       )}
@@ -158,17 +162,17 @@ const SettingsScreen = ({ navigation }) => {
     </View>
   );
 
-  const renderInfoRow = (icon, title, value, color = '#333') => (
+  const renderInfoRow = (icon, title, value, color = colors.text) => (
     <View style={styles.infoRow}>
       <View style={styles.infoLeft}>
-        <Ionicons name={icon} size={20} color="#007AFF" />
+        <Ionicons name={icon} size={20} color={colors.primary} />
         <Text style={styles.infoTitle}>{title}</Text>
       </View>
       <Text style={[styles.infoValue, { color }]}>{value}</Text>
     </View>
   );
 
-  const renderActionRow = (icon, title, subtitle, onPress, color = '#007AFF') => (
+  const renderActionRow = (icon, title, subtitle, onPress, color = colors.primary) => (
     <TouchableOpacity style={styles.actionRow} onPress={onPress}>
       <View style={styles.actionLeft}>
         <View style={styles.actionIcon}>
@@ -184,35 +188,96 @@ const SettingsScreen = ({ navigation }) => {
   );
 
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        {/* App Statistics */}
-        {renderSection('Statistics', (
+    <SafeAreaView style={[styles.container, { paddingTop: headerHeight }]}>
+      <ScrollView
+        style={styles.scrollView}
+        showsVerticalScrollIndicator={false}
+        scrollIndicatorInsets={{ top: headerHeight }}
+        onScroll={onScroll}
+        scrollEventThrottle={16}
+      >
+        {/* Language */}
+        {renderSection(t('settings.language'), (
           <>
-            {renderInfoRow('images', 'Total Photos', stats.totalImages.toString())}
-            {renderInfoRow('heart', 'Favorites', favStats.totalFavorites.toString(), '#FF6B6B')}
-            {renderInfoRow('folder', 'Categories', stats.categories.toString())}
-            {renderInfoRow('albums', 'Albums', stats.albums.toString())}
+            <TouchableOpacity style={styles.settingRow} onPress={() => setLanguage('ar')}>
+              <View style={styles.settingLeft}>
+                <View style={styles.settingIcon}>
+                  <Ionicons name="globe-outline" size={20} color={colors.primary} />
+                </View>
+                <View style={styles.settingInfo}>
+                  <Text style={styles.settingTitle}>{t('settings.language.arabic')}</Text>
+                </View>
+              </View>
+              {language === 'ar' && <Ionicons name="checkmark" size={20} color={colors.primary} />}
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.settingRow} onPress={() => setLanguage('en')}>
+              <View style={styles.settingLeft}>
+                <View style={styles.settingIcon}>
+                  <Ionicons name="globe-outline" size={20} color={colors.primary} />
+                </View>
+                <View style={styles.settingInfo}>
+                  <Text style={styles.settingTitle}>{t('settings.language.english')}</Text>
+                </View>
+              </View>
+              {language === 'en' && <Ionicons name="checkmark" size={20} color={colors.primary} />}
+            </TouchableOpacity>
+          </>
+        ))}
+
+        {/* Appearance / Theme */}
+        {renderSection(t('settings.theme'), (
+          <>
+            <TouchableOpacity style={styles.settingRow} onPress={() => setMode('system')}>
+              <View style={styles.settingLeft}>
+                <View style={styles.settingIcon}>
+                  <Ionicons name="contrast-outline" size={20} color={colors.primary} />
+                </View>
+                <View style={styles.settingInfo}>
+                  <Text style={styles.settingTitle}>{t('theme.system')}</Text>
+                </View>
+              </View>
+              {mode === 'system' && <Ionicons name="checkmark" size={20} color={colors.primary} />}
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.settingRow} onPress={() => setMode('light')}>
+              <View style={styles.settingLeft}>
+                <View style={styles.settingIcon}>
+                  <Ionicons name="sunny-outline" size={20} color={colors.primary} />
+                </View>
+                <View style={styles.settingInfo}>
+                  <Text style={styles.settingTitle}>{t('theme.light')}</Text>
+                </View>
+              </View>
+              {mode === 'light' && <Ionicons name="checkmark" size={20} color={colors.primary} />}
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.settingRow} onPress={() => setMode('dark')}>
+              <View style={styles.settingLeft}>
+                <View style={styles.settingIcon}>
+                  <Ionicons name="moon-outline" size={20} color={colors.primary} />
+                </View>
+                <View style={styles.settingInfo}>
+                  <Text style={styles.settingTitle}>{t('theme.dark')}</Text>
+                </View>
+              </View>
+              {mode === 'dark' && <Ionicons name="checkmark" size={20} color={colors.primary} />}
+            </TouchableOpacity>
+          </>
+        ))}
+
+        {/* App Statistics */}
+        {renderSection(t('settings.section.statistics'), (
+          <>
+            {renderInfoRow('book', t('stats.books'), String(stats.totalBooks || 0))}
+            {renderInfoRow('list', t('stats.chapters'), String(stats.totalChapters || 0))}
+            {renderInfoRow('heart', t('stats.favorites'), String((favorites || []).length), colors.danger)}
           </>
         ))}
 
         {/* App Settings */}
-        {renderSection('Preferences', (
+        {renderSection(t('settings.section.preferences'), (
           <>
-            {renderSettingRow(
-              'cloud-upload',
-              'Auto Backup',
-              'Automatically backup photos to cloud',
-              settings.autoBackup,
-              (value) => updateSetting('autoBackup', value)
-            )}
-            {renderSettingRow(
-              'image',
-              'High Quality Images',
-              'Use maximum quality for photos',
-              settings.highQualityImages,
-              (value) => updateSetting('highQualityImages', value)
-            )}
             {renderSettingRow(
               'information-circle',
               'Show Image Info',
@@ -221,92 +286,72 @@ const SettingsScreen = ({ navigation }) => {
               (value) => updateSetting('showImageInfo', value)
             )}
             {renderSettingRow(
-              'moon',
-              'Dark Mode',
-              'Use dark theme (coming soon)',
-              settings.darkMode,
-              (value) => updateSetting('darkMode', value)
-            )}
-            {renderSettingRow(
               'notifications',
               'Notifications',
               'Receive app notifications',
               settings.notifications,
               (value) => updateSetting('notifications', value)
             )}
-            {renderSettingRow(
-              'albums',
-              'Auto Organize',
-              'Automatically categorize new photos',
-              settings.autoOrganize,
-              (value) => updateSetting('autoOrganize', value)
-            )}
           </>
         ))}
 
         {/* Data Management */}
-        {renderSection('Data', (
+        {renderSection(t('settings.section.data'), (
           <>
             {renderActionRow(
               'download',
-              'Export Favorites',
+              t('settings.exportFavorites'),
               'Export your favorite photos list',
               handleExportFavorites
             )}
             {renderActionRow(
-              'refresh',
-              'Refresh Gallery',
-              'Reload photos from device',
-              refreshGallery
-            )}
-            {renderActionRow(
               'trash',
-              'Clear Cache',
+              t('settings.clearCache'),
               'Free up storage space',
               handleClearCache
             )}
             {renderActionRow(
               'warning',
-              'Reset App',
+              t('settings.resetApp'),
               'Clear all data and settings',
               handleResetApp,
-              '#FF3B30'
+              colors.danger
             )}
           </>
         ))}
 
         {/* About */}
-        {renderSection('About', (
+        {renderSection(t('settings.section.about'), (
           <>
             {renderInfoRow('phone-portrait', 'Version', '1.0.0')}
-            {renderInfoRow('code', 'Build', '2024.1.1')}
+            {renderInfoRow('code', 'Build', '2025.8.8')}
             {renderActionRow(
               'star',
-              'Rate App',
+              t('settings.rateApp'),
               'Rate us in the App Store',
               handleRateApp
             )}
             {renderActionRow(
               'share',
-              'Share App',
+              t('settings.shareApp'),
               'Tell your friends about this app',
               handleShareApp
             )}
             {renderActionRow(
               'mail',
-              'Contact Support',
+              t('settings.contactSupport'),
               'Get help or send feedback',
               () => Alert.alert('Contact', 'support@galleryapp.com')
             )}
             {renderActionRow(
               'document-text',
-              'Privacy Policy',
+              t('settings.privacyPolicy'),
               'View our privacy policy',
               () => Alert.alert('Privacy', 'Privacy policy would open here')
             )}
             {renderActionRow(
               'shield-checkmark',
-              'Terms of Service',
+              t('settings.termsOfService'),
               'View terms and conditions',
               () => Alert.alert('Terms', 'Terms of service would open here')
             )}
@@ -316,10 +361,10 @@ const SettingsScreen = ({ navigation }) => {
         {/* Footer */}
         <View style={styles.footer}>
           <Text style={styles.footerText}>
-            Made with ❤️ for photo lovers
+            Made by MELAD
           </Text>
           <Text style={styles.footerSubtext}>
-            © 2024 Gallery App. All rights reserved.
+            © 2025 MELAD. All rights reserved.
           </Text>
         </View>
       </ScrollView>
@@ -327,10 +372,10 @@ const SettingsScreen = ({ navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (colors) => ({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: colors.background,
   },
   scrollView: {
     flex: 1,
@@ -341,12 +386,12 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#333',
+    color: colors.text,
     marginBottom: 12,
     marginHorizontal: 16,
   },
   sectionContent: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.card,
     borderRadius: 12,
     marginHorizontal: 16,
     overflow: 'hidden',
@@ -358,7 +403,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: colors.border,
   },
   settingLeft: {
     flex: 1,
@@ -369,7 +414,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 8,
-    backgroundColor: '#f0f8ff',
+    backgroundColor: colors.primary + '20',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
@@ -380,12 +425,12 @@ const styles = StyleSheet.create({
   settingTitle: {
     fontSize: 16,
     fontWeight: '500',
-    color: '#333',
+    color: colors.text,
     marginBottom: 2,
   },
   settingSubtitle: {
     fontSize: 14,
-    color: '#666',
+    color: colors.subtext,
   },
   infoRow: {
     flexDirection: 'row',
@@ -394,7 +439,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: colors.border,
   },
   infoLeft: {
     flexDirection: 'row',
@@ -402,7 +447,7 @@ const styles = StyleSheet.create({
   },
   infoTitle: {
     fontSize: 16,
-    color: '#333',
+    color: colors.text,
     marginLeft: 12,
   },
   infoValue: {
@@ -416,7 +461,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: colors.border,
   },
   actionLeft: {
     flex: 1,
@@ -427,7 +472,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 8,
-    backgroundColor: '#f0f8ff',
+    backgroundColor: colors.primary + '20',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
@@ -442,7 +487,7 @@ const styles = StyleSheet.create({
   },
   actionSubtitle: {
     fontSize: 14,
-    color: '#666',
+    color: colors.subtext,
   },
   footer: {
     alignItems: 'center',
@@ -451,14 +496,15 @@ const styles = StyleSheet.create({
   },
   footerText: {
     fontSize: 16,
-    color: '#666',
+    color: colors.subtext,
     textAlign: 'center',
     marginBottom: 4,
   },
   footerSubtext: {
-    fontSize: 14,
-    color: '#999',
+    fontSize: 12,
+    color: colors.subtext,
     textAlign: 'center',
+    marginTop: 4,
   },
 });
 

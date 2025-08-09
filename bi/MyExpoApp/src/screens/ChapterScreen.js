@@ -4,44 +4,56 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  Pressable,
   Text,
   Alert,
   ActivityIndicator,
   Dimensions,
   Share,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import useHeaderScrollShadow from '../hooks/useHeaderScrollShadow';
+import { useHeaderHeight } from '@react-navigation/elements';
 
 import { useBible } from '../context/BibleContext';
-import { useFavorites } from '../context/FavoritesContext';
+import { useThemeMode } from '../context/ThemeContext';
+import { useLocale } from '../context/LocaleContext';
+import { useThemedStyles } from '../styles/useThemedStyles';
 
 const { width: screenWidth } = Dimensions.get('window');
 
 const ChapterScreen = ({ route, navigation }) => {
-  const { bookId, bookName, chapterNumber } = route.params;
+  const { colors } = useThemeMode();
+  const { t } = useLocale();
+  const { bookId, bookName, chapterNumber, targetVerse } = route.params;
   const {
     getChapter,
     addToFavorites,
     removeFromFavorites,
     isFavorite,
-    addBookmark,
-    removeBookmark,
-    isBookmarked,
     addToRecentReads,
     getBook,
   } = useBible();
 
-  const { toggleFavorite } = useFavorites();
+  // verse favorites are managed via useBible()
 
   const [chapter, setChapter] = useState(null);
   const [loading, setLoading] = useState(true);
   const [fontSize, setFontSize] = useState(18);
   const [selectedVerse, setSelectedVerse] = useState(null);
+  const [highlightedVerse, setHighlightedVerse] = useState(null);
   const [showVerseActions, setShowVerseActions] = useState(false);
+  const [chapterSheetVisible, setChapterSheetVisible] = useState(false);
 
   const scrollViewRef = useRef(null);
+  const versePositions = useRef({});
   const book = getBook(bookId);
+
+  // header shadow handler
+  const onScroll = useHeaderScrollShadow(navigation, { colors, threshold: 6 });
+  const headerHeight = useHeaderHeight();
 
   useEffect(() => {
     loadChapter();
@@ -53,24 +65,45 @@ const ChapterScreen = ({ route, navigation }) => {
         <View style={styles.headerButtons}>
           <TouchableOpacity
             style={styles.headerButton}
-            onPress={handleBookmarkPress}
+            onPress={handleFavoritePress}
           >
             <Ionicons
-              name={isBookmarked(bookId, chapterNumber) ? 'bookmark' : 'bookmark-outline'}
+              name={isFavorite(bookId, chapterNumber) ? 'bookmark' : 'bookmark-outline'}
               size={24}
-              color={isBookmarked(bookId, chapterNumber) ? '#4CAF50' : '#8B4513'}
+              color={isFavorite(bookId, chapterNumber) ? colors.primary : colors.subtext}
             />
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.headerButton}
             onPress={handleShareChapter}
           >
-            <Ionicons name="share-outline" size={24} color="#8B4513" />
+            <Ionicons name="share-outline" size={24} color={colors.primary} />
           </TouchableOpacity>
         </View>
       ),
     });
   }, [bookId, chapterNumber, bookName]);
+
+  // Scroll to target verse when provided
+  useEffect(() => {
+    if (!chapter) return;
+    const v = route.params?.targetVerse;
+    if (!v) return;
+    setHighlightedVerse(v);
+    const y = versePositions.current[v];
+    if (typeof y === 'number' && scrollViewRef.current) {
+      scrollViewRef.current.scrollTo({ y: Math.max(y - 100, 0), animated: true });
+    } else {
+      // Wait a bit for layouts to compute
+      const timer = setTimeout(() => {
+        const y2 = versePositions.current[v];
+        if (typeof y2 === 'number' && scrollViewRef.current) {
+          scrollViewRef.current.scrollTo({ y: Math.max(y2 - 100, 0), animated: true });
+        }
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [chapter, route.params?.targetVerse]);
 
   const loadChapter = () => {
     setLoading(true);
@@ -79,11 +112,11 @@ const ChapterScreen = ({ route, navigation }) => {
     setLoading(false);
   };
 
-  const handleBookmarkPress = async () => {
-    if (isBookmarked(bookId, chapterNumber)) {
-      await removeBookmark(`${bookId}.${chapterNumber}`);
+  const handleFavoritePress = async () => {
+    if (isFavorite(bookId, chapterNumber)) {
+      await removeFromFavorites(`${bookId}.${chapterNumber}`);
     } else {
-      await addBookmark(bookId, chapterNumber);
+      await addToFavorites(bookId, chapterNumber);
     }
   };
 
@@ -110,42 +143,52 @@ const ChapterScreen = ({ route, navigation }) => {
   };
 
   const handleVerseLongPress = (verse) => {
+    const fav = isFavorite(verse.id);
     Alert.alert(
       `${bookName} ${chapterNumber}:${verse.number}`,
       verse.text,
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('ui.cancel'), style: 'cancel' },
         {
-          text: 'Add to Favorites',
-          onPress: () => handleAddToFavorites(verse),
+          text: t(fav ? 'ui.removeFromFavorites' : 'ui.addToFavorites'),
+          onPress: () => handleToggleFavorite(verse),
         },
         {
-          text: 'Share Verse',
+          text: t('ui.shareVerse'),
           onPress: () => handleShareVerse(verse),
         },
       ]
     );
   };
 
-  const handleAddToFavorites = async (verse) => {
+  const handleToggleFavorite = async (verse) => {
+    const wasFavorite = isFavorite(verse.id);
     try {
-      await addToFavorites(
-        verse.id,
-        bookId,
-        chapterNumber,
-        verse.number,
-        verse.text
-      );
-      Alert.alert('Success', 'Verse added to favorites!');
+      if (wasFavorite) {
+        await removeFromFavorites(verse.id);
+        Alert.alert(t('alert.success'), t('toast.removedFromFavorites'));
+      } else {
+        await addToFavorites(
+          verse.id,
+          bookId,
+          chapterNumber,
+          verse.number,
+          verse.text
+        );
+        Alert.alert(t('alert.success'), t('toast.addedToFavorites'));
+      }
     } catch (error) {
-      Alert.alert('Error', 'Failed to add verse to favorites');
+      Alert.alert(
+        t('alert.error'),
+        wasFavorite ? t('toast.removeFromFavoritesFailed') : t('toast.addToFavoritesFailed')
+      );
     }
   };
 
   const handleShareVerse = async (verse) => {
     try {
       await Share.share({
-        message: `"${verse.text}"\n\n${bookName} ${chapterNumber}:${verse.number}`,
+        message: `${bookName} ${chapterNumber}:${verse.number} - ${verse.text}`,
         title: `${bookName} ${chapterNumber}:${verse.number}`,
       });
     } catch (error) {
@@ -173,12 +216,24 @@ const ChapterScreen = ({ route, navigation }) => {
     }, 100);
   };
 
+  const jumpToChapter = (targetChapter) => {
+    if (!book) return;
+    if (targetChapter < 1 || targetChapter > book.totalChapters) return;
+    navigation.setParams({ chapterNumber: targetChapter });
+    setTimeout(() => {
+      loadChapter();
+      addToRecentReads(bookId, targetChapter);
+    }, 100);
+  };
+
   const adjustFontSize = (increment) => {
     const newSize = fontSize + increment;
     if (newSize >= 12 && newSize <= 32) {
       setFontSize(newSize);
     }
   };
+
+  const styles = useThemedStyles(makeStyles);
 
   const renderVerseActionModal = () => {
     if (!showVerseActions || !selectedVerse) return null;
@@ -191,7 +246,7 @@ const ChapterScreen = ({ route, navigation }) => {
               {bookName} {chapterNumber}:{selectedVerse.number}
             </Text>
             <TouchableOpacity onPress={() => setShowVerseActions(false)}>
-              <Ionicons name="close" size={24} color="#666" />
+              <Ionicons name="close" size={24} color={colors.subtext} />
             </TouchableOpacity>
           </View>
 
@@ -201,12 +256,18 @@ const ChapterScreen = ({ route, navigation }) => {
             <TouchableOpacity
               style={styles.verseActionButton}
               onPress={() => {
-                handleAddToFavorites(selectedVerse);
+                handleToggleFavorite(selectedVerse);
                 setShowVerseActions(false);
               }}
             >
-              <Ionicons name="heart-outline" size={20} color="#FF6B6B" />
-              <Text style={styles.verseActionButtonText}>Add to Favorites</Text>
+              <Ionicons
+                name={isFavorite(selectedVerse.id) ? 'heart' : 'heart-outline'}
+                size={20}
+                color={colors.danger}
+              />
+              <Text style={styles.verseActionButtonText}>
+                {t(isFavorite(selectedVerse.id) ? 'ui.removeFromFavorites' : 'ui.addToFavorites')}
+              </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -216,8 +277,8 @@ const ChapterScreen = ({ route, navigation }) => {
                 setShowVerseActions(false);
               }}
             >
-              <Ionicons name="share-outline" size={20} color="#8B4513" />
-              <Text style={styles.verseActionButtonText}>Share Verse</Text>
+              <Ionicons name="share-outline" size={20} color={colors.primary} />
+              <Text style={styles.verseActionButtonText}>{t('ui.shareVerse')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -238,7 +299,7 @@ const ChapterScreen = ({ route, navigation }) => {
         <Ionicons
           name="chevron-back"
           size={20}
-          color={chapterNumber <= 1 ? '#ccc' : '#8B4513'}
+          color={chapterNumber <= 1 ? colors.subtext : colors.primary}
         />
         <Text
           style={[
@@ -246,17 +307,17 @@ const ChapterScreen = ({ route, navigation }) => {
             chapterNumber <= 1 && styles.navButtonTextDisabled,
           ]}
         >
-          Previous
+          {t('ui.previous')}
         </Text>
       </TouchableOpacity>
 
-      <View style={styles.chapterInfo}>
+      <TouchableOpacity style={styles.chapterInfo} onPress={() => setChapterSheetVisible(true)}>
         <Text style={styles.chapterTitle}>{bookName}</Text>
         <Text style={styles.chapterNumber}>Chapter {chapterNumber}</Text>
         <Text style={styles.chapterStats}>
           {chapter?.verses?.length || 0} verses
         </Text>
-      </View>
+      </TouchableOpacity>
 
       <TouchableOpacity
         style={[
@@ -272,12 +333,12 @@ const ChapterScreen = ({ route, navigation }) => {
             book && chapterNumber >= book.totalChapters && styles.navButtonTextDisabled,
           ]}
         >
-          Next
+          {t('ui.next')}
         </Text>
         <Ionicons
           name="chevron-forward"
           size={20}
-          color={book && chapterNumber >= book.totalChapters ? '#ccc' : '#8B4513'}
+          color={book && chapterNumber >= book.totalChapters ? colors.subtext : colors.primary}
         />
       </TouchableOpacity>
     </View>
@@ -293,7 +354,7 @@ const ChapterScreen = ({ route, navigation }) => {
         <Ionicons
           name="remove"
           size={20}
-          color={fontSize <= 12 ? '#ccc' : '#8B4513'}
+          color={fontSize <= 12 ? colors.subtext : colors.primary}
         />
       </TouchableOpacity>
 
@@ -307,7 +368,7 @@ const ChapterScreen = ({ route, navigation }) => {
         <Ionicons
           name="add"
           size={20}
-          color={fontSize >= 32 ? '#ccc' : '#8B4513'}
+          color={fontSize >= 32 ? colors.subtext : colors.primary}
         />
       </TouchableOpacity>
     </View>
@@ -316,29 +377,91 @@ const ChapterScreen = ({ route, navigation }) => {
   const renderVerse = (verse) => (
     <TouchableOpacity
       key={verse.id}
-      style={styles.verseContainer}
+      style={[
+        styles.verseContainer,
+        verse.number === highlightedVerse && styles.highlightedVerse,
+      ]}
       onPress={() => handleVersePress(verse)}
       onLongPress={() => handleVerseLongPress(verse)}
       activeOpacity={0.7}
+      onLayout={(e) => {
+        versePositions.current[verse.number] = e.nativeEvent.layout.y;
+      }}
     >
       <View style={styles.verseContent}>
-        <Text style={styles.verseNumber}>{verse.number}</Text>
         <Text style={[styles.verseText, { fontSize }]}>
+          <Text style={styles.verseNumber}>{`${verse.number} `}</Text>
           {verse.text}
         </Text>
-        {isFavorite(verse.id) && (
-          <View style={styles.favoriteIndicator}>
-            <Ionicons name="heart" size={12} color="#FF6B6B" />
-          </View>
-        )}
+        <TouchableOpacity
+          style={styles.verseLikeButton}
+          onPress={() => handleToggleFavorite(verse)}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Ionicons
+            name={isFavorite(verse.id) ? 'heart' : 'heart-outline'}
+            size={18}
+            color={isFavorite(verse.id) ? colors.danger : colors.subtext}
+          />
+        </TouchableOpacity>
       </View>
     </TouchableOpacity>
   );
 
+  const renderChapterSheet = () => {
+    if (!book) return null;
+    const chapters = Array.from({ length: book.totalChapters }, (_, i) => i + 1);
+
+    return (
+      <Modal
+        visible={chapterSheetVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setChapterSheetVisible(false)}
+      >
+        <View style={styles.chapterSheetBackdrop}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setChapterSheetVisible(false)} />
+          <View style={[styles.chapterSheetContainer, { backgroundColor: colors.card }] }>
+            <View style={styles.chapterSheetHandle} />
+            <Text style={[styles.chapterSheetTitle, { color: colors.text }]}>
+              {bookName}
+            </Text>
+            <ScrollView
+              style={styles.chapterSheetScroll}
+              contentContainerStyle={styles.chaptersGrid}
+              showsVerticalScrollIndicator
+            >
+              {chapters.map((n) => {
+                const active = n === chapterNumber;
+                return (
+                  <TouchableOpacity
+                    key={n}
+                    style={[styles.chapterItem, active && styles.chapterItemActive]}
+                    onPress={() => {
+                      setChapterSheetVisible(false);
+                      jumpToChapter(n);
+                    }}
+                  >
+                    <Text style={[styles.chapterItemText, active && styles.chapterItemTextActive]}>
+                      {n}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+            <TouchableOpacity style={styles.chapterSheetClose} onPress={() => setChapterSheetVisible(false)}>
+              <Text style={[styles.chapterSheetCloseText, { color: colors.text }]}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    );
+  };
+
   if (loading) {
     return (
       <SafeAreaView style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#8B4513" />
+        <ActivityIndicator size="large" color={colors.primary} />
         <Text style={styles.loadingText}>Loading chapter...</Text>
       </SafeAreaView>
     );
@@ -347,7 +470,7 @@ const ChapterScreen = ({ route, navigation }) => {
   if (!chapter) {
     return (
       <SafeAreaView style={styles.errorContainer}>
-        <Ionicons name="alert-circle-outline" size={64} color="#666" />
+        <Ionicons name="alert-circle-outline" size={64} color={colors.subtext} />
         <Text style={styles.errorText}>Chapter not found</Text>
         <TouchableOpacity
           style={styles.backButton}
@@ -360,7 +483,7 @@ const ChapterScreen = ({ route, navigation }) => {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { paddingTop: headerHeight }]}>
       {renderNavigationControls()}
       {renderFontControls()}
 
@@ -369,6 +492,9 @@ const ChapterScreen = ({ route, navigation }) => {
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        scrollIndicatorInsets={{ top: headerHeight }}
+        onScroll={onScroll}
+        scrollEventThrottle={16}
       >
         <View style={styles.versesContainer}>
           {chapter.verses.map(renderVerse)}
@@ -376,40 +502,41 @@ const ChapterScreen = ({ route, navigation }) => {
       </ScrollView>
 
       {renderVerseActionModal()}
+      {renderChapterSheet()}
     </SafeAreaView>
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (colors) => ({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: colors.background,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f8f9fa',
+    backgroundColor: colors.background,
   },
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    color: '#666',
+    color: colors.subtext,
   },
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f8f9fa',
+    backgroundColor: colors.background,
   },
   errorText: {
     fontSize: 18,
-    color: '#666',
+    color: colors.subtext,
     marginTop: 16,
     marginBottom: 24,
   },
   backButton: {
-    backgroundColor: '#8B4513',
+    backgroundColor: colors.primary,
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 8,
@@ -431,32 +558,32 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#fff',
+    backgroundColor: colors.card,
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    borderBottomColor: colors.border,
   },
   navButton: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 8,
     borderRadius: 8,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: colors.background,
     minWidth: 80,
     justifyContent: 'center',
   },
   navButtonDisabled: {
-    backgroundColor: '#f0f0f0',
+    backgroundColor: colors.border,
   },
   navButtonText: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#8B4513',
+    color: colors.primary,
     marginHorizontal: 4,
   },
   navButtonTextDisabled: {
-    color: '#ccc',
+    color: colors.subtext,
   },
   chapterInfo: {
     flex: 1,
@@ -466,38 +593,41 @@ const styles = StyleSheet.create({
   chapterTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#333',
+    color: colors.text,
     marginBottom: 2,
   },
   chapterNumber: {
     fontSize: 16,
-    color: '#8B4513',
+    color: colors.primary,
     fontWeight: '600',
     marginBottom: 2,
   },
   chapterStats: {
     fontSize: 12,
-    color: '#666',
+    color: colors.subtext,
+  },
+  chapterFavoriteButton: {
+    marginLeft: 8,
   },
   fontControls: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: colors.card,
     paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    borderBottomColor: colors.border,
   },
   fontButton: {
     padding: 8,
     borderRadius: 6,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: colors.background,
     marginHorizontal: 8,
   },
   fontSizeText: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#666',
+    color: colors.subtext,
     marginHorizontal: 16,
   },
   scrollView: {
@@ -512,43 +642,42 @@ const styles = StyleSheet.create({
   verseContainer: {
     marginBottom: 12,
   },
+  highlightedVerse: {
+    backgroundColor: colors.card,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.danger,
+    borderRadius: 6,
+    paddingLeft: 8,
+  },
   verseContent: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    backgroundColor: '#fff',
-    borderRadius: 8,
-    padding: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
-    position: 'relative',
+    justifyContent: 'space-between',
   },
   verseNumber: {
+    display: 'inline-flex',
     fontSize: 14,
     fontWeight: 'bold',
-    color: '#8B4513',
-    backgroundColor: '#f5f5f5',
+    color: colors.primary,
+    backgroundColor: colors.background,
     borderRadius: 12,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    marginRight: 12,
-    minWidth: 28,
-    textAlign: 'center',
-    alignSelf: 'flex-start',
-    marginTop: 2,
   },
   verseText: {
+    display: 'flow',
     flex: 1,
     lineHeight: 26,
-    color: '#333',
-    textAlign: 'right', // For Arabic text
+    color: colors.text,
+  },
+  verseLikeButton: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 16,
+    backgroundColor: colors.background,
+    marginLeft: 8,
   },
   favoriteIndicator: {
     position: 'absolute',
     top: 8,
-    right: 8,
   },
   modalOverlay: {
     position: 'absolute',
@@ -561,7 +690,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   verseActionModal: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.card,
     borderRadius: 16,
     margin: 20,
     maxHeight: '80%',
@@ -573,32 +702,31 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    borderBottomColor: colors.border,
   },
   verseActionTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#333',
+    color: colors.text,
     flex: 1,
   },
   verseActionText: {
     fontSize: 16,
-    color: '#333',
+    color: colors.text,
     lineHeight: 24,
     padding: 16,
-    textAlign: 'right', // For Arabic text
   },
   verseActions: {
     flexDirection: 'row',
     justifyContent: 'space-around',
     padding: 16,
     borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
+    borderTopColor: colors.border,
   },
   verseActionButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f5f5f5',
+    backgroundColor: colors.background,
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 8,
@@ -608,8 +736,81 @@ const styles = StyleSheet.create({
   verseActionButtonText: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#333',
+    color: colors.text,
     marginLeft: 8,
+  },
+  chapterSheetBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+  },
+  chapterSheetContainer: {
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    paddingTop: 8,
+    paddingBottom: 16,
+    paddingHorizontal: 16,
+    maxHeight: '70%',
+  },
+  chapterSheetScroll: {
+    maxHeight: '100%',
+  },
+  chapterSheetHandle: {
+    alignSelf: 'center',
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.border,
+    marginBottom: 8,
+  },
+  chapterSheetTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  chaptersGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    paddingBottom: 8,
+  },
+  chapterItem: {
+    width: (screenWidth - 16 * 2 - 12 * 3) / 4, /* 4 per row with 12px gaps */
+    marginBottom: 12,
+    paddingVertical: 10,
+    borderRadius: 8,
+    backgroundColor: colors.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  chapterItemActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  chapterItemText: {
+    fontSize: 14,
+    color: colors.text,
+    fontWeight: '600',
+  },
+  chapterItemTextActive: {
+    color: '#fff',
+  },
+  chapterSheetClose: {
+    marginTop: 8,
+    alignSelf: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  chapterSheetCloseText: {
+    fontSize: 14,
+    fontWeight: '600',
   },
 });
 

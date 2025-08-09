@@ -103,17 +103,6 @@ export const LAYOUT = {
   },
 };
 
-// Image Constants
-export const IMAGE_CONSTANTS = {
-  defaultColumns: 3,
-  maxColumns: 4,
-  minColumns: 2,
-  defaultSpacing: 2,
-  defaultAspectRatio: 1,
-  maxImageSize: 2048, // pixels
-  imageQuality: 0.9,
-  thumbnailSize: 150,
-};
 
 // Storage Keys
 export const STORAGE_KEYS = {
@@ -125,58 +114,12 @@ export const STORAGE_KEYS = {
   lastSync: 'lastSyncTimestamp',
 };
 
-// Default Categories
-export const DEFAULT_CATEGORIES = [
-  {
-    id: '1',
-    name: 'Screenshots',
-    color: '#FF6B6B',
-    icon: 'phone-portrait-outline',
-    description: 'Screen captures and screenshots',
-  },
-  {
-    id: '2',
-    name: 'Camera',
-    color: '#4ECDC4',
-    icon: 'camera-outline',
-    description: 'Photos taken with camera',
-  },
-  {
-    id: '3',
-    name: 'Downloads',
-    color: '#45B7D1',
-    icon: 'download-outline',
-    description: 'Downloaded images',
-  },
-  {
-    id: '4',
-    name: 'WhatsApp',
-    color: '#25D366',
-    icon: 'logo-whatsapp',
-    description: 'WhatsApp images',
-  },
-  {
-    id: '5',
-    name: 'Instagram',
-    color: '#E4405F',
-    icon: 'logo-instagram',
-    description: 'Instagram photos',
-  },
-  {
-    id: '6',
-    name: 'Others',
-    color: '#95A5A6',
-    icon: 'folder-outline',
-    description: 'Other images',
-  },
-];
 
 // Sort Options
 export const SORT_OPTIONS = [
   { value: 'newest', label: 'Newest First', key: 'creationTime', order: 'desc' },
   { value: 'oldest', label: 'Oldest First', key: 'creationTime', order: 'asc' },
   { value: 'name', label: 'Name (A-Z)', key: 'filename', order: 'asc' },
-  { value: 'size', label: 'Size (Largest)', key: 'fileSize', order: 'desc' },
 ];
 
 // Filter Options
@@ -184,9 +127,6 @@ export const FILTER_OPTIONS = [
   { value: 'all', label: 'All Images' },
   { value: 'favorites', label: 'Favorites' },
   { value: 'recent', label: 'Recent' },
-  { value: 'screenshots', label: 'Screenshots' },
-  { value: 'camera', label: 'Camera' },
-  { value: 'downloads', label: 'Downloads' },
 ];
 
 // Animation Durations
@@ -206,15 +146,11 @@ export const GRID_LAYOUTS = [
 
 // File Extensions
 export const SUPPORTED_IMAGE_FORMATS = [
-  'jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'heic', 'heif'
+  'jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'
 ];
 
 // Permissions
 export const PERMISSIONS = {
-  camera: {
-    title: 'Camera Permission',
-    message: 'This app needs camera access to take photos.',
-  },
   mediaLibrary: {
     title: 'Photo Library Permission',
     message: 'This app needs access to your photo library to view and organize photos.',
@@ -233,15 +169,12 @@ export const ERROR_MESSAGES = {
   saveFailed: 'Failed to save image.',
   deleteFailed: 'Failed to delete image.',
   shareFailed: 'Failed to share image.',
-  cameraError: 'Camera not available.',
   networkError: 'Network connection required.',
   storageError: 'Storage error occurred.',
 };
 
 // Success Messages
 export const SUCCESS_MESSAGES = {
-  imageSaved: 'Image saved successfully!',
-  imageDeleted: 'Image deleted successfully!',
   favoriteAdded: 'Added to favorites!',
   favoriteRemoved: 'Removed from favorites!',
   categoryCreated: 'Category created successfully!',
@@ -268,14 +201,4 @@ export const API_ENDPOINTS = {
   sync: '/sync',
   backup: '/backup',
   restore: '/restore',
-};
-
-// Feature Flags (for future use)
-export const FEATURES = {
-  cloudSync: false,
-  aiTagging: false,
-  faceRecognition: false,
-  photoFilters: false,
-  videoSupport: false,
-  collaboration: false,
 };

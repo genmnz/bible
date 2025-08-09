@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
   View,
-  StyleSheet,
   ScrollView,
   TouchableOpacity,
   Text,
@@ -10,9 +9,14 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import useHeaderScrollShadow from '../hooks/useHeaderScrollShadow';
+import { useHeaderHeight } from '@react-navigation/elements';
 
 import { useBible } from '../context/BibleContext';
-
+import { useLocale } from '../context/LocaleContext';
+import { useThemeMode } from '../context/ThemeContext';
+import { useThemedStyles } from '../styles/useThemedStyles';
+import { makeSharedStyles } from '../styles/sharedStyles';
 const { width: screenWidth } = Dimensions.get('window');
 
 const BibleScreen = ({ navigation }) => {
@@ -21,21 +25,28 @@ const BibleScreen = ({ navigation }) => {
     loading,
     recentReads,
     favorites,
-    bookmarks,
     getStats,
     addToRecentReads,
+    BOOK_NAMES,
   } = useBible();
+
+  const { t, language } = useLocale();
+  const { colors } = useThemeMode();
+  const styles = useThemedStyles(makeStyles);
+
+  const onScroll = useHeaderScrollShadow(navigation, { colors, threshold: 6 });
+  const headerHeight = useHeaderHeight();
 
   const [stats, setStats] = useState({});
 
   useEffect(() => {
     setStats(getStats());
-  }, [books, favorites, bookmarks, recentReads]);
+  }, [books, favorites, recentReads]);
 
   const handleBookPress = (book) => {
     navigation.navigate('Chapter', {
       bookId: book.id,
-      bookName: book.name,
+      bookName: BOOK_NAMES[book.id] || book.name,
       chapterNumber: 1,
     });
     addToRecentReads(book.id, 1);
@@ -44,86 +55,67 @@ const BibleScreen = ({ navigation }) => {
   const handleRecentReadPress = (recentRead) => {
     navigation.navigate('Chapter', {
       bookId: recentRead.bookId,
-      bookName: recentRead.bookName,
+      bookName: BOOK_NAMES[recentRead.bookId] || recentRead.bookName,
       chapterNumber: recentRead.chapterNumber,
     });
   };
 
   const renderWelcomeCard = () => (
-    <View style={styles.welcomeCard}>
+    <View style={[styles.welcomeCard, { backgroundColor: colors.card }]}>
       <View style={styles.welcomeContent}>
-        <Ionicons name="book" size={32} color="#8B4513" />
+        <Ionicons name="book" size={32} color={colors.primary} />
         <View style={styles.welcomeText}>
-          <Text style={styles.welcomeTitle}>Holy Bible</Text>
-          <Text style={styles.welcomeSubtitle}>Smith Van Dyke Arabic Translation</Text>
+          <Text style={[styles.welcomeTitle, { color: colors.text }]}>{t('title.bibleHome')}</Text>
+          <Text style={[styles.welcomeSubtitle, { color: colors.subtext }]}>{t('settings.bibleVersion')}</Text>
+          <View style={styles.versionSelector}>
+            <Text style={[styles.versionButtonText, { color: colors.text }]}> 
+              {language === 'ar' ? t('version.arasvd') : t('version.kjv')}
+            </Text>
+          </View>
         </View>
       </View>
     </View>
   );
 
-  const renderStatsCards = () => (
-    <View style={styles.statsContainer}>
-      <View style={styles.statsRow}>
-        <View style={styles.statCard}>
-          <Ionicons name="library" size={24} color="#8B4513" />
-          <Text style={styles.statNumber}>{stats.totalBooks || 0}</Text>
-          <Text style={styles.statLabel}>Books</Text>
-        </View>
-        <View style={styles.statCard}>
-          <Ionicons name="document-text" size={24} color="#8B4513" />
-          <Text style={styles.statNumber}>{stats.totalChapters || 0}</Text>
-          <Text style={styles.statLabel}>Chapters</Text>
-        </View>
-      </View>
-      <View style={styles.statsRow}>
-        <View style={styles.statCard}>
-          <Ionicons name="heart" size={24} color="#FF6B6B" />
-          <Text style={styles.statNumber}>{stats.favorites || 0}</Text>
-          <Text style={styles.statLabel}>Favorites</Text>
-        </View>
-        <View style={styles.statCard}>
-          <Ionicons name="bookmark" size={24} color="#4CAF50" />
-          <Text style={styles.statNumber}>{stats.bookmarks || 0}</Text>
-          <Text style={styles.statLabel}>Bookmarks</Text>
-        </View>
-      </View>
-    </View>
-  );
-
-  const renderQuickActions = () => (
+  const renderQuickActionsAndStats = () => (
     <View style={styles.section}>
-      <Text style={styles.sectionTitle}>Quick Actions</Text>
+      <Text style={[styles.sectionTitle, { color: colors.text }]}>{t('ui.quickActions')}</Text>
       <View style={styles.quickActionsContainer}>
         <TouchableOpacity
-          style={styles.quickActionButton}
+          style={[styles.quickActionButton, { backgroundColor: colors.card }]}
           onPress={() => navigation.navigate('BookList')}
         >
-          <Ionicons name="library" size={24} color="#8B4513" />
-          <Text style={styles.quickActionText}>Browse Books</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4  }}>
+            <Ionicons name="library" size={24} color={colors.primary} />
+          <Text style={[styles.statLabel, { color: colors.subtext }]}>{t('stats.books')}</Text>
+          </View>
+          <Text style={[styles.statNumber, { color: colors.text }]}>{stats.totalBooks || 0}</Text>
+          <Text style={[styles.quickActionText, { color: colors.text }]}>{t('ui.browseBooks')}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={styles.quickActionButton}
+          style={[styles.quickActionButton, { backgroundColor: colors.card }]}
           onPress={() => navigation.navigate('Search')}
         >
-          <Ionicons name="search" size={24} color="#8B4513" />
-          <Text style={styles.quickActionText}>Search</Text>
+          {/* wrap the icon and stats in a flex container */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4  }}>
+            <Ionicons name="search" size={24} color={colors.primary} />
+            <Text style={[styles.statLabel, { color: colors.subtext }]}>{t('stats.chapters')}</Text>
+          </View>
+          <Text style={[styles.statNumber, { color: colors.text }]}>{stats.totalChapters || 0}</Text>
+          <Text style={[styles.quickActionText, { color: colors.text }]}>{t('ui.search')}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={styles.quickActionButton}
+          style={[styles.quickActionButton, { backgroundColor: colors.card }]}
           onPress={() => navigation.navigate('Favorites')}
         >
-          <Ionicons name="heart" size={24} color="#FF6B6B" />
-          <Text style={styles.quickActionText}>Favorites</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.quickActionButton}
-          onPress={() => navigation.navigate('Bookmarks')}
-        >
-          <Ionicons name="bookmark" size={24} color="#4CAF50" />
-          <Text style={styles.quickActionText}>Bookmarks</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4  }}>
+          <Ionicons name="heart" size={24} color={colors.danger} />
+          <Text style={[styles.statLabel, { color: colors.subtext }]}>{t('stats.favorites')}</Text>
+          </View>
+          <Text style={[styles.statNumber, { color: colors.text }]}>{stats.favorites || 0}</Text>
+          <Text style={[styles.quickActionText, { color: colors.text }]}>{t('ui.favorites')}</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -132,19 +124,19 @@ const BibleScreen = ({ navigation }) => {
   const renderRecentReads = () => (
     <View style={styles.section}>
       <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Recent Reads</Text>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>{t('ui.recentReads')}</Text>
         {recentReads.length > 3 && (
           <TouchableOpacity onPress={() => navigation.navigate('BookList')}>
-            <Text style={styles.seeAllText}>See All</Text>
+            <Text style={[styles.seeAllText, { color: colors.primary }]}>{t('ui.seeAll')}</Text>
           </TouchableOpacity>
         )}
       </View>
 
       {recentReads.length === 0 ? (
         <View style={styles.emptyState}>
-          <Ionicons name="time-outline" size={48} color="#ccc" />
-          <Text style={styles.emptyText}>No recent reads</Text>
-          <Text style={styles.emptySubtext}>Start reading to see your history here</Text>
+          <Ionicons name="time-outline" size={48} color={colors.subtext} />
+          <Text style={[styles.emptyText, { color: colors.subtext }]}>{t('ui.noRecentReads')}</Text>
+          <Text style={[styles.emptySubtext, { color: colors.subtext }]}>{t('ui.startReading')}</Text>
         </View>
       ) : (
         <ScrollView
@@ -155,19 +147,19 @@ const BibleScreen = ({ navigation }) => {
           {recentReads.slice(0, 5).map((recentRead) => (
             <TouchableOpacity
               key={recentRead.id}
-              style={styles.recentReadCard}
+              style={[styles.recentReadCard, { backgroundColor: colors.card }]}
               onPress={() => handleRecentReadPress(recentRead)}
             >
-              <View style={styles.recentReadIcon}>
-                <Ionicons name="book-outline" size={24} color="#8B4513" />
+              <View style={[styles.recentReadIcon, { backgroundColor: '#f5f5f5' }]}>
+                <Ionicons name="book-outline" size={24} color={colors.primary} />
               </View>
-              <Text style={styles.recentReadBook} numberOfLines={1}>
-                {recentRead.bookName}
+              <Text style={[styles.recentReadBook, { color: colors.text }]} numberOfLines={1}>
+                {BOOK_NAMES[recentRead.bookId] || recentRead.bookName}
               </Text>
-              <Text style={styles.recentReadChapter}>
-                Chapter {recentRead.chapterNumber}
+              <Text style={[styles.recentReadChapter, { color: colors.subtext }]}>
+                {t('title.chapter')} {recentRead.chapterNumber}
               </Text>
-              <Text style={styles.recentReadTime}>
+              <Text style={[styles.recentReadTime, { color: colors.subtext }]}>
                 {new Date(recentRead.readAt).toLocaleDateString()}
               </Text>
             </TouchableOpacity>
@@ -177,293 +169,293 @@ const BibleScreen = ({ navigation }) => {
     </View>
   );
 
-  const renderPopularBooks = () => {
-    const popularBooks = [
-      { id: 'Gen', name: 'Genesis' },
-      { id: 'Ps', name: 'Psalms' },
-      { id: 'Matt', name: 'Matthew' },
-      { id: 'John', name: 'John' },
-      { id: 'Rom', name: 'Romans' },
-    ];
-
-    return (
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Popular Books</Text>
-        <View style={styles.popularBooksContainer}>
-          {popularBooks.map((book) => {
-            const fullBook = books.find(b => b.id === book.id);
-            if (!fullBook) return null;
-
-            return (
-              <TouchableOpacity
-                key={book.id}
-                style={styles.popularBookCard}
-                onPress={() => handleBookPress(fullBook)}
-              >
-                <View style={styles.popularBookIcon}>
-                  <Ionicons name="book" size={20} color="#8B4513" />
-                </View>
-                <Text style={styles.popularBookName} numberOfLines={1}>
-                  {book.name}
-                </Text>
-                <Text style={styles.popularBookChapters}>
-                  {fullBook.totalChapters} chapters
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      </View>
-    );
-  };
-
-  if (loading) {
-    return (
-      <SafeAreaView style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#8B4513" />
-        <Text style={styles.loadingText}>Loading Holy Bible...</Text>
-      </SafeAreaView>
-    );
-  }
-
+const renderStories = () => {
+  const Stories = [
+    { id: 'Gen', name: 'Genesis' },
+    { id: 'Ps', name: 'Psalms' },
+    { id: 'Matt', name: 'Matthew' },
+    { id: 'John', name: 'John' },
+  ];
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        {renderWelcomeCard()}
-        {renderStatsCards()}
-        {renderQuickActions()}
-        {renderRecentReads()}
-        {renderPopularBooks()}
-      </ScrollView>
-    </SafeAreaView>
+    <View style={styles.section}>
+      <Text style={[styles.sectionTitle, { color: colors.text }]}>{t('ui.stories')}</Text>
+      <View style={styles.storiesContainer}>
+        {Stories.map((book) => {
+          const fullBook = books.find(b => b.id === book.id);
+          if (!fullBook) return null;
+
+          return (
+            <TouchableOpacity
+              key={book.id}
+              style={[styles.storiesCard, { backgroundColor: colors.card }]}
+              onPress={() => handleBookPress(fullBook)}
+            >
+              <View style={styles.storiesIcon}>
+                <Ionicons name="book" size={20} color={colors.primary} />
+              </View>
+              <Text style={[styles.storiesName, { color: colors.text }]} numberOfLines={1}>
+                {BOOK_NAMES[book.id] || book.name}
+              </Text>
+              <Text style={[styles.storiesChapters, { color: colors.subtext }]}>
+                {fullBook.totalChapters} {t('ui.chapters')}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    </View>
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f8f9fa',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#f8f9fa',
-  },
-  loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: '#666',
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: 16,
-  },
-  welcomeCard: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  welcomeContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  welcomeText: {
-    marginLeft: 16,
-    flex: 1,
-  },
-  welcomeTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 4,
-  },
-  welcomeSubtitle: {
-    fontSize: 16,
-    color: '#666',
-  },
-  statsContainer: {
-    marginBottom: 24,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    marginBottom: 12,
-  },
-  statCard: {
-    flex: 1,
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-    marginHorizontal: 6,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  statNumber: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#333',
-    marginTop: 8,
-    marginBottom: 4,
-  },
-  statLabel: {
-    fontSize: 12,
-    color: '#666',
-    textAlign: 'center',
-  },
-  section: {
-    marginBottom: 24,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  seeAllText: {
-    fontSize: 14,
-    color: '#8B4513',
-    fontWeight: '500',
-  },
-  quickActionsContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-  },
-  quickActionButton: {
-    width: (screenWidth - 48) / 2,
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 20,
-    alignItems: 'center',
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  quickActionText: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#333',
-    marginTop: 8,
-    textAlign: 'center',
-  },
-  recentReadsContainer: {
-    paddingRight: 16,
-  },
-  recentReadCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    width: 140,
-    marginRight: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  recentReadIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#f5f5f5',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  recentReadBook: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 4,
-  },
-  recentReadChapter: {
-    fontSize: 12,
-    color: '#666',
-    marginBottom: 8,
-  },
-  recentReadTime: {
-    fontSize: 10,
-    color: '#999',
-  },
-  popularBooksContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-  },
-  popularBookCard: {
-    width: (screenWidth - 48) / 3,
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  popularBookIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#f5f5f5',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  popularBookName: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 4,
-    textAlign: 'center',
-  },
-  popularBookChapters: {
-    fontSize: 10,
-    color: '#666',
-    textAlign: 'center',
-  },
-  emptyState: {
-    alignItems: 'center',
-    paddingVertical: 32,
-  },
-  emptyText: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#666',
-    marginTop: 12,
-    marginBottom: 4,
-  },
-  emptySubtext: {
-    fontSize: 14,
-    color: '#999',
-    textAlign: 'center',
-  },
-});
+if (loading) {
+  return (
+    <SafeAreaView style={[styles.loadingContainer, { paddingTop: headerHeight }]}>
+      <ActivityIndicator size="large" color={colors.primary} />
+    </SafeAreaView>
+  );
+}
 
+return (
+  <SafeAreaView style={[styles.container, { paddingTop: headerHeight }]}>
+    <ScrollView
+      style={styles.scrollView}
+      contentContainerStyle={styles.scrollContent}
+      showsVerticalScrollIndicator={false}
+      onScroll={onScroll}
+      scrollEventThrottle={16}
+      scrollIndicatorInsets={{ top: headerHeight }}
+    >
+      {renderWelcomeCard()}
+      {renderQuickActionsAndStats()}
+      {renderRecentReads()}
+      {renderStories()}
+    </ScrollView>
+  </SafeAreaView>
+);
+}
+
+  const makeStyles = (colors) => {
+      const shared = makeSharedStyles(colors);
+      return {
+      container: shared.container,
+      loadingContainer: shared.loadingContainer,
+      loadingText: shared.loadingText,
+      scrollView: shared.scrollView,
+      scrollContent: shared.scrollContent,
+      welcomeCard: {
+          backgroundColor: colors.card,
+          borderRadius: 16,
+          padding: 20,
+          marginBottom: 16,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.1,
+          shadowRadius: 8,
+          elevation: 3,
+      },
+      welcomeContent: {
+          flexDirection: 'row',
+          alignItems: 'center',
+      },
+      welcomeText: {
+          marginLeft: 16,
+          flex: 1,
+      },
+      welcomeTitle: {
+          fontSize: 24,
+          fontWeight: 'bold',
+          color: colors.text,
+          marginBottom: 4,
+      },
+      welcomeSubtitle: {
+          fontSize: 16,
+          color: colors.subtext,
+      },
+      versionSelector: {
+          marginTop: 12,
+          alignSelf: 'flex-start',
+      },
+      versionButton: {
+          paddingVertical: 10,
+          paddingHorizontal: 12,
+          borderRadius: 8,
+          borderWidth: 1,
+      },
+      versionButtonText: {
+          fontSize: 14,
+          fontWeight: '500',
+      },
+      modalBackdrop: {
+          flex: 1,
+          backgroundColor: 'rgba(0,0,0,0.4)',
+          justifyContent: 'center',
+          alignItems: 'center',
+      },
+      modalContainer: {
+          width: (screenWidth - 48),
+          borderRadius: 12,
+          padding: 16,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.2,
+          shadowRadius: 6,
+          elevation: 5,
+      },
+      modalTitle: {
+          fontSize: 18,
+          fontWeight: '700',
+          marginBottom: 8,
+      },
+      modalOption: {
+          flexDirection: 'row',
+          alignItems: 'center',
+          paddingVertical: 12,
+      },
+      modalOptionText: {
+          marginLeft: 10,
+          fontSize: 16,
+      },
+      modalClose: {
+          marginTop: 8,
+          alignSelf: 'flex-end',
+      },
+      modalCloseText: {
+          fontSize: 14,
+          fontWeight: '600',
+      },
+      statsContainer: {
+          marginBottom: 24,
+      },
+      statsRow: {
+          flexDirection: 'row',
+          marginBottom: 12,
+      },
+      statCard: { ...shared.statCard, flex: 1, marginHorizontal: 6 },
+      statNumber: shared.statNumber,
+      statLabel: shared.statLabel,
+      section: shared.section,
+      sectionHeader: shared.sectionHeader,
+      sectionTitle: { ...shared.sectionTitle, fontSize: 20 },
+      seeAllText: shared.seeAllText,
+      quickActionsContainer: {
+          flexDirection: 'row',
+          flexWrap: 'wrap',
+          justifyContent: 'space-between',
+      },
+      quickActionButton: {
+          width: (screenWidth - 48) / 2,
+          backgroundColor: colors.card,
+          borderRadius: 12,
+          padding: 20,
+          alignItems: 'center',
+          marginBottom: 12,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.1,
+          shadowRadius: 4,
+          elevation: 2,
+      },
+      quickActionText: {
+          fontSize: 16,
+          fontWeight: '500',
+          color: colors.text,
+          marginTop: 8,
+          textAlign: 'center',
+      },
+      recentReadsContainer: {
+          paddingRight: 16,
+      },
+      recentReadCard: {
+          backgroundColor: colors.card,
+          borderRadius: 12,
+          padding: 16,
+          width: 140,
+          marginRight: 12,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.1,
+          shadowRadius: 4,
+          elevation: 2,
+      },
+      recentReadIcon: {
+          width: 40,
+          height: 40,
+          borderRadius: 20,
+          backgroundColor: colors.background,
+          justifyContent: 'center',
+          alignItems: 'center',
+          marginBottom: 12,
+      },
+      recentReadBook: {
+          fontSize: 14,
+          fontWeight: '600',
+          color: colors.text,
+          marginBottom: 4,
+      },
+      recentReadChapter: {
+          fontSize: 12,
+          color: colors.subtext,
+          marginBottom: 8,
+      },
+      recentReadTime: {
+          fontSize: 10,
+          color: colors.subtext,
+      },
+      storiesContainer: {
+          flexDirection: 'row',
+          flexWrap: 'wrap',
+          justifyContent: 'space-between',
+      },
+      storiesCard: {
+          width: (screenWidth - 48) / 3,
+          backgroundColor: colors.card,
+          borderRadius: 12,
+          padding: 16,
+          alignItems: 'center',
+          marginBottom: 12,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.1,
+          shadowRadius: 4,
+          elevation: 2,
+      },
+      storiesIcon: {
+          width: 36,
+          height: 36,
+          borderRadius: 18,
+          backgroundColor: colors.background,
+          justifyContent: 'center',
+          alignItems: 'center',
+          marginBottom: 8,
+      },
+      storiesName: {
+          fontSize: 14,
+          fontWeight: '600',
+          color: colors.text,
+          marginBottom: 4,
+          textAlign: 'center',
+      },
+      storiesChapters: {
+          fontSize: 10,
+          color: colors.subtext,
+          textAlign: 'center',
+      },
+      emptyState: {
+          alignItems: 'center',
+          paddingVertical: 32,
+      },
+      emptyText: {
+          fontSize: 16,
+          fontWeight: '500',
+          color: colors.subtext,
+          marginTop: 12,
+          marginBottom: 4,
+      },
+      emptySubtext: {
+          fontSize: 14,
+          color: colors.subtext,
+          textAlign: 'center',
+      },
+  }
+};
 export default BibleScreen;
